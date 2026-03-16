@@ -608,6 +608,16 @@ type FLPMetrics struct {
 	// +optional
 	IncludeList *[]FLPMetric `json:"includeList,omitempty"`
 
+	// `additionalIncludeList` is a list of metric names to include in addition to the default metrics.
+	// Unlike `includeList`, this appends to the default list rather than replacing it.
+	// This field is mutually exclusive with `includeList`. If `includeList` is set, `additionalIncludeList` is ignored.
+	// The names correspond to the names in Prometheus without the prefix. For example,
+	// `namespace_egress_packets_total` shows up as `netobserv_namespace_egress_packets_total` in Prometheus.
+	// Note that the more metrics you add, the bigger is the impact on Prometheus workload resources.
+	// More information, with full list of available metrics: https://github.com/netobserv/netobserv-operator/blob/main/docs/Metrics.md
+	// +optional
+	AdditionalIncludeList *[]FLPMetric `json:"additionalIncludeList,omitempty"`
+
 	// `disableAlerts` is a list of alert groups that should be disabled from the default set of alerts.
 	// Possible values are: `NetObservNoFlows`, `NetObservLokiError`, `PacketDropsByKernel`, `PacketDropsByDevice`, `IPsecErrors`, `NetpolDenied`,
 	// `LatencyHighTrend`, `DNSErrors`, `DNSNxDomain`, `ExternalEgressHighTrend`, `ExternalIngressHighTrend`, `Ingress5xxErrors`, `IngressHTTPLatencyTrend`.

@@ -11600,6 +11600,21 @@ available.<br/>
         </tr>
     </thead>
     <tbody><tr>
+        <td><b>additionalIncludeList</b></td>
+        <td>[]enum</td>
+        <td>
+          `additionalIncludeList` is a list of metric names to include in addition to the default metrics.
+Unlike `includeList`, this appends to the default list rather than replacing it.
+This field is mutually exclusive with `includeList`. If `includeList` is set, `additionalIncludeList` is ignored.
+The names correspond to the names in Prometheus without the prefix. For example,
+`namespace_egress_packets_total` shows up as `netobserv_namespace_egress_packets_total` in Prometheus.
+Note that the more metrics you add, the bigger is the impact on Prometheus workload resources.
+More information, with full list of available metrics: https://github.com/netobserv/netobserv-operator/blob/main/docs/Metrics.md<br/>
+          <br/>
+            <i>Enum</i>: namespace_egress_bytes_total, namespace_egress_packets_total, namespace_ingress_bytes_total, namespace_ingress_packets_total, namespace_flows_total, node_egress_bytes_total, node_egress_packets_total, node_ingress_bytes_total, node_ingress_packets_total, node_flows_total, workload_egress_bytes_total, workload_egress_packets_total, workload_ingress_bytes_total, workload_ingress_packets_total, workload_flows_total, namespace_drop_bytes_total, namespace_drop_packets_total, node_drop_bytes_total, node_drop_packets_total, workload_drop_bytes_total, workload_drop_packets_total, namespace_rtt_seconds, node_rtt_seconds, workload_rtt_seconds, namespace_dns_latency_seconds, node_dns_latency_seconds, workload_dns_latency_seconds, node_network_policy_events_total, namespace_network_policy_events_total, workload_network_policy_events_total, node_ipsec_flows_total, namespace_ipsec_flows_total, workload_ipsec_flows_total, node_to_node_ingress_flows_total<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b>disableAlerts</b></td>
         <td>[]string</td>
         <td>

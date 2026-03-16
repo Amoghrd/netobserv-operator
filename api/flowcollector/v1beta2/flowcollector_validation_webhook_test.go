@@ -894,6 +894,28 @@ func TestValidateFLP(t *testing.T) {
 			},
 		},
 		{
+			name: "Both includeList and additionalIncludeList set",
+			fc: &FlowCollector{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: FlowCollectorSpec{
+					Processor: FlowCollectorFLP{
+						Metrics: FLPMetrics{
+							IncludeList:           &[]FLPMetric{"node_ingress_bytes_total"},
+							AdditionalIncludeList: &[]FLPMetric{"namespace_egress_bytes_total"},
+							DisableAlerts:         []AlertTemplate{AlertNoFlows, AlertLokiError, HealthRuleExternalEgressHighTrend, HealthRuleExternalIngressHighTrend},
+						},
+					},
+				},
+			},
+			expectedWarnings: admission.Warnings{
+				"Both spec.processor.metrics.includeList and spec.processor.metrics.additionalIncludeList are set. " +
+					"When includeList is set, it replaces the default metrics entirely, and additionalIncludeList is ignored. " +
+					"Use includeList to override defaults, or use additionalIncludeList alone to append to defaults.",
+			},
+		},
+		{
 			name:       "Missing provided TLS config",
 			ocpVersion: "4.18.0",
 			fc: &FlowCollector{

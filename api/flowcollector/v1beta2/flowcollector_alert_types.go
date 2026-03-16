@@ -114,17 +114,31 @@ type HealthRuleThresholds struct {
 func (s *FlowCollectorSpec) GetIncludeList() []string {
 	var list []string
 	if s.Processor.Metrics.IncludeList == nil {
+		// Use defaults
 		if s.UseLoki() {
 			list = DefaultIncludeList
 		} else {
 			// When loki is disabled, increase what's available through metrics by default, to minimize the loss of information
 			list = DefaultIncludeListLokiDisabled
 		}
+
+		// AdditionalIncludeList only applies when using defaults (IncludeList is not set)
+		if s.Processor.Metrics.AdditionalIncludeList != nil {
+			for _, m := range *s.Processor.Metrics.AdditionalIncludeList {
+				metricName := string(m)
+				if !slices.Contains(list, metricName) {
+					list = append(list, metricName)
+				}
+			}
+		}
 	} else {
+		// IncludeList is set - use it exclusively (overwrite defaults)
+		// AdditionalIncludeList is ignored when IncludeList is set
 		for _, m := range *s.Processor.Metrics.IncludeList {
 			list = append(list, string(m))
 		}
 	}
+
 	if !s.Agent.EBPF.IsPktDropEnabled() {
 		list = removeMetricsByPattern(list, "_drop_")
 	}

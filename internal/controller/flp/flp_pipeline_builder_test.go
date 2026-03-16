@@ -217,6 +217,43 @@ func TestMergeMetricsConfiguration_EmptyList(t *testing.T) {
 	assert.Len(cfs.Parameters, 5)
 }
 
+func TestMergeMetricsConfiguration_WithAdditionalList(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := getConfig()
+	cfg.Processor.Metrics.AdditionalIncludeList = &[]flowslatest.FLPMetric{"namespace_egress_bytes_total", "namespace_ingress_bytes_total"}
+
+	b := monoBuilder("namespace", &cfg)
+	scm, _, dcm, err := b.configMaps()
+	assert.NoError(err)
+	cfs, _ := validatePipelineConfig(t, scm, dcm)
+	names := getSortedMetricsNames(cfs.Parameters[5].Encode.Prom.Metrics)
+	// Should have both defaults and additional metrics
+	assert.Contains(names, "namespace_egress_bytes_total")
+	assert.Contains(names, "namespace_ingress_bytes_total")
+	// Should also have some default metrics
+	assert.Contains(names, "node_ingress_bytes_total")
+	assert.Equal("netobserv_", cfs.Parameters[5].Encode.Prom.Prefix)
+}
+
+func TestMergeMetricsConfiguration_WithBothLists(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := getConfig()
+	cfg.Processor.Metrics.IncludeList = &[]flowslatest.FLPMetric{"node_ingress_bytes_total"}
+	cfg.Processor.Metrics.AdditionalIncludeList = &[]flowslatest.FLPMetric{"namespace_egress_bytes_total"}
+
+	b := monoBuilder("namespace", &cfg)
+	scm, _, dcm, err := b.configMaps()
+	assert.NoError(err)
+	cfs, _ := validatePipelineConfig(t, scm, dcm)
+	names := getSortedMetricsNames(cfs.Parameters[5].Encode.Prom.Metrics)
+	// When both are set, includeList takes precedence and additionalIncludeList is ignored
+	assert.Len(names, 1)
+	assert.Equal("node_ingress_bytes_total", names[0])
+	assert.Equal("netobserv_", cfs.Parameters[5].Encode.Prom.Prefix)
+}
+
 func TestPipelineWithExporter(t *testing.T) {
 	assert := assert.New(t)
 

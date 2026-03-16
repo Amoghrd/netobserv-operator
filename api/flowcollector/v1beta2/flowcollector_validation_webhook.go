@@ -260,6 +260,7 @@ func (v *validator) validateFLP() {
 	v.validateFLPFilters()
 	v.validateFLPAlerts()
 	v.validateFLPMetricsForAlerts()
+	v.validateFLPMetricsIncludeLists()
 	v.validateFLPTLS()
 }
 
@@ -432,6 +433,17 @@ func (v *validator) validateFLPMetricsForAlerts() {
 				}
 			}
 		}
+	}
+}
+
+func (v *validator) validateFLPMetricsIncludeLists() {
+	if v.fc.Processor.Metrics.IncludeList != nil && v.fc.Processor.Metrics.AdditionalIncludeList != nil {
+		v.warnings = append(
+			v.warnings,
+			"Both spec.processor.metrics.includeList and spec.processor.metrics.additionalIncludeList are set. "+
+				"When includeList is set, it replaces the default metrics entirely, and additionalIncludeList is ignored. "+
+				"Use includeList to override defaults, or use additionalIncludeList alone to append to defaults.",
+		)
 	}
 }
 

@@ -466,6 +466,8 @@ spec:
         path: processor.filters
       - displayName: Log types
         path: processor.logTypes
+      - displayName: Additional include list
+        path: processor.metrics.additionalIncludeList
       - displayName: Disable alerts
         path: processor.metrics.disableAlerts
       - displayName: Health rules
