@@ -459,6 +459,7 @@ func (b *builder) getPromConfig(ctx context.Context) cfg.PrometheusConfig {
 	return config
 }
 
+// nolint:cyclop	// no real complexity here, just long boilerplate
 func (b *builder) setFrontendConfig(fconf *cfg.FrontendConfig, metrics []cfg.MetricInfo) (string, error) {
 	if b.desired.Agent.EBPF.IsPktDropEnabled() {
 		fconf.Features = append(fconf.Features, "pktDrop")
@@ -490,6 +491,10 @@ func (b *builder) setFrontendConfig(fconf *cfg.FrontendConfig, metrics []cfg.Met
 
 	if b.desired.Agent.EBPF.IsIPSecEnabled() {
 		fconf.Features = append(fconf.Features, "ipsec")
+	}
+
+	if b.desired.Agent.EBPF.IsTLSTrackingEnabled() {
+		fconf.Features = append(fconf.Features, "tlsTracking")
 	}
 
 	fconf.RecordTypes = helper.GetRecordTypes(&b.desired.Processor)
