@@ -80,6 +80,7 @@ kubectl config set-context --current --namespace=netobserv
 kubectl get pods -oyaml | grep image:
 kubectl get pods -n netobserv-privileged -oyaml | grep image:
 
+kubectl wait -n netobserv --timeout=60s --for condition=Available=True deployment netobserv-plugin
 kubectl port-forward svc/netobserv-plugin 9001:9001 -n netobserv
 ```
 
