@@ -728,12 +728,21 @@ func (b *PipelineBuilder) createOpenTelemetryStage(name string, spec *flowslates
 	metricsEnabled := spec.Metrics.Enable != nil && *spec.Metrics.Enable
 
 	if logsEnabled || metricsEnabled {
+		// Filter out fields for disabled features before transforming to OTEL format
+		filterRules := b.getOtelFieldFilterRules()
+		var currentStage config.PipelineBuilderStage
+		if len(filterRules) > 0 {
+			currentStage = fromStage.TransformFilter(fmt.Sprintf("%s-field-filter", name), api.TransformFilter{Rules: filterRules})
+		} else {
+			currentStage = *fromStage
+		}
+
 		// add transform stage
 		transformCfg, err := otelConfig.GetOtelTransformConfig(spec.FieldsMapping)
 		if err != nil {
 			return err
 		}
-		transformStage := fromStage.TransformGeneric(fmt.Sprintf("%s-transform", name), *transformCfg)
+		transformStage := currentStage.TransformGeneric(fmt.Sprintf("%s-transform", name), *transformCfg)
 
 		// otel logs config
 		if logsEnabled {
@@ -759,6 +768,73 @@ func (b *PipelineBuilder) createOpenTelemetryStage(name string, spec *flowslates
 		}
 	}
 	return nil
+}
+
+// getOtelFieldFilterRules generates filter rules to remove fields for disabled agent features
+// This prevents unused/null fields from appearing in OTEL exports
+func (b *PipelineBuilder) getOtelFieldFilterRules() []api.TransformFilterRule {
+	rules := []api.TransformFilterRule{}
+
+	// Remove DNS fields if DNSTracking is disabled
+	if !b.desired.Agent.EBPF.IsDNSTrackingEnabled() {
+		dnsFields := []string{"DnsErrno", "DnsFlags", "DnsFlagsResponseCode", "DnsId", "DnsLatencyMs", "DnsName"}
+		for _, field := range dnsFields {
+			rules = append(rules, api.TransformFilterRule{
+				Type: api.RemoveField,
+				RemoveField: &api.TransformFilterGenericRule{
+					Input: field,
+				},
+			})
+		}
+	}
+
+	// Remove PacketDrop fields if PacketDrop is disabled
+	if !b.desired.Agent.EBPF.IsPktDropEnabled() {
+		dropFields := []string{"PktDropBytes", "PktDropPackets", "PktDropLatestDropCause", "PktDropLatestFlags", "PktDropLatestState"}
+		for _, field := range dropFields {
+			rules = append(rules, api.TransformFilterRule{
+				Type: api.RemoveField,
+				RemoveField: &api.TransformFilterGenericRule{
+					Input: field,
+				},
+			})
+		}
+	}
+
+	// Remove FlowRTT field if FlowRTT is disabled
+	if !b.desired.Agent.EBPF.IsFlowRTTEnabled() {
+		rules = append(rules, api.TransformFilterRule{
+			Type: api.RemoveField,
+			RemoveField: &api.TransformFilterGenericRule{
+				Input: "TimeFlowRttNs",
+			},
+		})
+	}
+
+	// Remove IPSec field if IPSec is disabled
+	if !b.desired.Agent.EBPF.IsIPSecEnabled() {
+		rules = append(rules, api.TransformFilterRule{
+			Type: api.RemoveField,
+			RemoveField: &api.TransformFilterGenericRule{
+				Input: "IPSecStatus",
+			},
+		})
+	}
+
+	// Remove UDN network name fields if UDNMapping is disabled
+	if !b.desired.Agent.EBPF.IsUDNMappingEnabled() {
+		udnFields := []string{"SrcK8S_NetworkName", "DstK8S_NetworkName"}
+		for _, field := range udnFields {
+			rules = append(rules, api.TransformFilterRule{
+				Type: api.RemoveField,
+				RemoveField: &api.TransformFilterGenericRule{
+					Input: field,
+				},
+			})
+		}
+	}
+
+	return rules
 }
 
 func getOtelConnType(connType string) string {
