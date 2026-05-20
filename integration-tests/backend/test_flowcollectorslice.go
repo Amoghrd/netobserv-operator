@@ -402,9 +402,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// Get server pod IP
 		serverPodIP, _ := getPodIP(oc, testPingPodsTemplate.ServerNS, "ping-server", ipStackType)
 
-		// Ping server pod from client pod
-		_, _ = e2eoutput.RunHostCmd(testPingPodsTemplate.ClientNS, "ping-client", "ping -c 100 "+serverPodIP)
-		time.Sleep(120 * time.Second)
+		// Continuously ping server for 300 seconds to generate sustained traffic
+		_, _ = e2eoutput.RunHostCmd(testPingPodsTemplate.ClientNS, "ping-client", "timeout 300 ping "+serverPodIP)
+		time.Sleep(60 * time.Second)
 
 		lokilabels = Lokilabels{
 			App:             "netobserv-flowcollector",

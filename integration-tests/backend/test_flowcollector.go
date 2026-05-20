@@ -326,7 +326,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	g.Context("with Loki", func() {
 		var (
 			lokiDir, _ = filePath.Abs("testdata/loki")
-                      	// Loki Operator variables
+			// Loki Operator variables
 			lokiPackageName = "loki-operator"
 			lokiSource      CatalogSourceObjects
 			lokiCatalog     = "redhat-operators"
@@ -341,7 +341,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 				CatalogSource: &lokiSource,
 			}
-                       	// LokiStack variables
+			// LokiStack variables
 			ipStackType       string
 			lokiStackTemplate = filePath.Join(lokiDir, "lokistack-simple.yaml")
 			lokiTenant        = "openshift-network"
@@ -2683,7 +2683,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				Template:      flowFixturePath,
 			}
 
-			defer func() { _ = flow.DeleteFlowcollector(oc) }()
+			defer flow.DeleteFlowcollector(oc)
 			flow.CreateFlowcollector(oc)
 
 			g.By("Wait for a min before logs gets collected and written to loki")
@@ -2717,8 +2717,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			for _, r := range flowRecords {
 				o.Expect(r.Flowlog.TLSTypes).Should(o.ContainElement("ServerHello"), "expected TLS Types to contain ServerHello")
 				o.Expect(r.Flowlog.TLSCipherSuite).NotTo(o.BeEmpty())
-				// Will be fixed in follow-up
-				// o.Expect(r.Flowlog.TLSCurve).NotTo(o.BeEmpty())
 			}
 
 			g.By("Verify HTTPS flows with TLSVersion 1.3")
@@ -2729,9 +2727,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			// Verify TLS 1.3 fields
 			for _, r := range flowRecords {
 				o.Expect(r.Flowlog.TLSTypes).Should(o.ContainElement("ServerHello"), "expected TLS Types to contain ServerHello")
-				o.Expect(r.Flowlog.TLSCurve).Should(o.ContainSubstring("X25519"))
+				o.Expect(r.Flowlog.TLSGroup).NotTo(o.BeEmpty())
 				o.Expect(r.Flowlog.TLSCipherSuite).NotTo(o.BeEmpty())
 			}
+
+			g.By("Verify TLS metrics")
+			verifyTLSMetrics(oc, "TLSVersion")
+			verifyTLSMetrics(oc, "TLSCipherSuite")
+			verifyTLSMetrics(oc, "TLSGroup")
 		})
 
 		g.It("Author:kapjain-Medium-88683-Secure communications between Agent and FLP [Serial]", func() {
@@ -2943,8 +2946,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				g.By("Deploy Kafka with TLS")
 				oc.CreateSpecifiedNamespaceAsAdmin(kafkaNs)
 				kafkaMetrics.deployKafkaMetrics(oc)
-				kafka.deployKafka(oc)
 				kafkaNodePool.deployKafkaNodePool(oc)
+				kafka.deployKafka(oc)
 				kafkaTopic.deployKafkaTopic(oc)
 				kafkaUser.deployKafkaUser(oc)
 
