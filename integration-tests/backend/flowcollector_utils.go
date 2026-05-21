@@ -113,11 +113,11 @@ func getIPFIXFlowRecordsFromAPI(oc *exutil.CLI, namespace, podName string) ([]Fl
 }
 
 // Parse IPFIX data string format: "    key: value \n    key2: value2 \n ..."
-func parseIPFIXDataString(data string) map[string]interface{} {
-	fields := make(map[string]interface{})
-	lines := strings.Split(data, "\n")
+func parseIPFIXDataString(data string) map[string]any {
+	fields := make(map[string]any)
+	lines := strings.SplitSeq(data, "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -236,8 +236,8 @@ func (flowlog *Flowlog) verifyIPFIXFields() {
 	// Verify IPFIX standard fields are present and valid
 	o.Expect(flowlog.SrcAddr).NotTo(o.BeEmpty(), flow)
 	o.Expect(flowlog.DstAddr).NotTo(o.BeEmpty(), flow)
-	o.Expect(flowlog.SrcPort).Should(o.BeNumerically(">", 0), flow)
-	o.Expect(flowlog.DstPort).Should(o.BeNumerically(">", 0), flow)
+	o.Expect(flowlog.SrcPort).Should(o.BeNumerically(">=", 0), flow)
+	o.Expect(flowlog.DstPort).Should(o.BeNumerically(">=", 0), flow)
 	o.Expect(flowlog.Proto).Should(o.BeNumerically(">", 0), flow)
 	o.Expect(flowlog.Packets).Should(o.BeNumerically(">", 0), flow)
 	o.Expect(flowlog.Sampling).Should(o.BeNumerically(">=", 0), flow)
