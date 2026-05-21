@@ -434,15 +434,16 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				g.Skip("Skipping test since LokiStack is not ready")
 			}
 			ls.Route = "https://" + getRouteAddress(oc, ls.Namespace, ls.Name)
-		})
 
-		g.AfterEach(func() {
-			ls.removeLokiStack(oc)
-			ls.removeObjectStorage(oc)
-			if !Lokiexisting {
-				LO.uninstallOperator(oc)
-			}
-			oc.DeleteSpecifiedNamespaceAsAdmin(lokiStackNS)
+			// Defer cleanup - runs even if test fails or panics
+			g.DeferCleanup(func() {
+				ls.removeLokiStack(oc)
+				ls.removeObjectStorage(oc)
+				if !Lokiexisting {
+					LO.uninstallOperator(oc)
+				}
+				oc.DeleteSpecifiedNamespaceAsAdmin(lokiStackNS)
+			})
 		})
 
 		g.Context("FLP, eBPF and Console metrics:", func() {
@@ -2956,17 +2957,18 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				WaitForPodsReadyWithLabel(oc, kafka.Namespace, "strimzi.io/pool-name=kafka-pool")
 				waitForKafkaReady(oc, kafka.Name, kafka.Namespace)
 				waitForKafkaTopicReady(oc, kafkaTopic.TopicName, kafkaTopic.Namespace)
-			})
 
-			g.AfterEach(func() {
-				kafkaUser.deleteKafkaUser(oc)
-				kafkaTopic.deleteKafkaTopic(oc)
-				kafkaNodePool.deleteKafkaNodePool(oc)
-				kafka.deleteKafka(oc)
-				if !AMQexisting {
-					amq.uninstallOperator(oc)
-				}
-				oc.DeleteSpecifiedNamespaceAsAdmin(kafkaNs)
+				// Defer cleanup - runs even if test fails or panics
+				g.DeferCleanup(func() {
+					kafkaUser.deleteKafkaUser(oc)
+					kafkaTopic.deleteKafkaTopic(oc)
+					kafkaNodePool.deleteKafkaNodePool(oc)
+					kafka.deleteKafka(oc)
+					if !AMQexisting {
+						amq.uninstallOperator(oc)
+					}
+					oc.DeleteSpecifiedNamespaceAsAdmin(kafkaNs)
+				})
 			})
 
 			g.It("Author:aramesha-NonPreRelease-Longduration-Critical-56362-High-53597-High-56326-High-64880-High-75340-Verify network flows are captured with Kafka with TLS [Serial][Slow]", func() {
@@ -3198,13 +3200,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				o.Expect(err).ToNot(o.HaveOccurred())
 				waitUntilHyperConvergedReady(oc, "kubevirt-hyperconverged", virtOperatorNS)
 				WaitForPodsReadyWithLabel(oc, virtOperatorNS, "app.kubernetes.io/managed-by=virt-operator")
-			})
 
-			g.AfterEach(func() {
-				deleteResource(oc, "hyperconverged", "kubevirt-hyperconverged", virtOperatorNS)
-				if !VOexisting {
-					VO.uninstallOperator(oc)
-				}
+				// Defer cleanup - runs even if test fails or panics
+				g.DeferCleanup(func() {
+					deleteResource(oc, "hyperconverged", "kubevirt-hyperconverged", virtOperatorNS)
+					if !VOexisting {
+						VO.uninstallOperator(oc)
+					}
+				})
 			})
 
 			g.It("Author:aramesha-NonPreRelease-Longduration-High-76537-Verify flow enrichment for VM's secondary interfaces [Disruptive][Slow]", func() {

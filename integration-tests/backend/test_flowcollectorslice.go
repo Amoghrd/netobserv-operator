@@ -189,15 +189,16 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			g.Skip("Skipping test since LokiStack is not ready")
 		}
 		ls.Route = "https://" + getRouteAddress(oc, ls.Namespace, ls.Name)
-	})
 
-	g.AfterEach(func() {
-		ls.removeLokiStack(oc)
-		ls.removeObjectStorage(oc)
-		if !Lokiexisting {
-			LO.uninstallOperator(oc)
-		}
-		oc.DeleteSpecifiedNamespaceAsAdmin(lokiStackNS)
+		// Defer cleanup - runs even if test fails or panics
+		g.DeferCleanup(func() {
+			ls.removeLokiStack(oc)
+			ls.removeObjectStorage(oc)
+			if !Lokiexisting {
+				LO.uninstallOperator(oc)
+			}
+			oc.DeleteSpecifiedNamespaceAsAdmin(lokiStackNS)
+		})
 	})
 
 	g.It("Author:aramesha-Critical-86388-Verify flowCollectorSlice collectionMode: AlwaysCollect [Serial]", func() {
