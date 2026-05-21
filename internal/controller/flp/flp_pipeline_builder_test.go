@@ -110,6 +110,15 @@ func getSortedMetricsNames(m []api.MetricsItem) []string {
 	return ret
 }
 
+func buildAndGetMetricNames(t *testing.T, cfg *flowslatest.FlowCollectorSpec) ([]string, *config.Root) {
+	b := monoBuilder("namespace", cfg)
+	scm, _, dcm, err := b.configMaps()
+	assert.NoError(t, err)
+	cfs, _ := validatePipelineConfig(t, scm, dcm)
+	names := getSortedMetricsNames(cfs.Parameters[5].Encode.Prom.Metrics)
+	return names, cfs
+}
+
 func TestMergeMetricsConfiguration_Default(t *testing.T) {
 	assert := assert.New(t)
 
@@ -217,6 +226,90 @@ func TestMergeMetricsConfiguration_EmptyList(t *testing.T) {
 	assert.Len(cfs.Parameters, 5)
 }
 
+func TestMergeMetricsConfiguration_WithAdditionalList(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := getConfig()
+	cfg.Processor.Metrics.AdditionalIncludeList = &[]flowslatest.FLPMetric{"namespace_egress_bytes_total", "namespace_ingress_bytes_total"}
+
+	names, cfs := buildAndGetMetricNames(t, &cfg)
+	// Should have both defaults and additional metrics
+	assert.Contains(names, "namespace_egress_bytes_total")
+	assert.Contains(names, "namespace_ingress_bytes_total")
+	// Should also have some default metrics
+	assert.Contains(names, "node_ingress_bytes_total")
+	assert.Equal("netobserv_", cfs.Parameters[5].Encode.Prom.Prefix)
+}
+
+func TestMergeMetricsConfiguration_WithAdditionalList_Empty(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := getConfig()
+	cfg.Processor.Metrics.AdditionalIncludeList = &[]flowslatest.FLPMetric{}
+
+	names, _ := buildAndGetMetricNames(t, &cfg)
+	// Empty list should still have defaults
+	assert.NotEmpty(names)
+	assert.Contains(names, "node_ingress_bytes_total")
+}
+
+func TestMergeMetricsConfiguration_WithAdditionalList_Nil(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := getConfig()
+	cfg.Processor.Metrics.AdditionalIncludeList = nil
+
+	names, _ := buildAndGetMetricNames(t, &cfg)
+	// Nil list should still have defaults
+	assert.NotEmpty(names)
+	assert.Contains(names, "node_ingress_bytes_total")
+}
+
+func TestMergeMetricsConfiguration_WithAdditionalList_Dedup(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := getConfig()
+	cfg.Processor.Metrics.AdditionalIncludeList = &[]flowslatest.FLPMetric{
+		"node_ingress_bytes_total",     // Already in defaults
+		"namespace_egress_bytes_total", // New metric
+		"namespace_egress_bytes_total", // Duplicate in additional
+		"node_ingress_bytes_total",     // Duplicate overlap with default
+	}
+
+	names, cfs := buildAndGetMetricNames(t, &cfg)
+
+	// Count occurrences to verify deduplication
+	nodeIngressCount := 0
+	namespaceEgressCount := 0
+	for _, n := range names {
+		if n == "node_ingress_bytes_total" {
+			nodeIngressCount++
+		}
+		if n == "namespace_egress_bytes_total" {
+			namespaceEgressCount++
+		}
+	}
+
+	// Each metric should appear exactly once
+	assert.Equal(1, nodeIngressCount, "node_ingress_bytes_total should appear exactly once")
+	assert.Equal(1, namespaceEgressCount, "namespace_egress_bytes_total should appear exactly once")
+	assert.Equal("netobserv_", cfs.Parameters[5].Encode.Prom.Prefix)
+}
+
+func TestMergeMetricsConfiguration_WithBothLists(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := getConfig()
+	cfg.Processor.Metrics.IncludeList = &[]flowslatest.FLPMetric{"node_ingress_bytes_total"}
+	cfg.Processor.Metrics.AdditionalIncludeList = &[]flowslatest.FLPMetric{"namespace_egress_bytes_total"}
+
+	names, cfs := buildAndGetMetricNames(t, &cfg)
+	// When both are set, includeList takes precedence and additionalIncludeList is ignored
+	assert.Len(names, 1)
+	assert.Equal("node_ingress_bytes_total", names[0])
+	assert.Equal("netobserv_", cfs.Parameters[5].Encode.Prom.Prefix)
+}
+
 func TestPipelineWithExporter(t *testing.T) {
 	assert := assert.New(t)
 
@@ -240,7 +333,7 @@ func TestPipelineWithExporter(t *testing.T) {
 	assert.NoError(err)
 	cfs, pipeline := validatePipelineConfig(t, scm, dcm)
 	assert.Equal(
-		`[{"name":"grpc"},{"name":"extract_conntrack","follows":"grpc"},{"name":"enrich","follows":"extract_conntrack"},{"name":"loki","follows":"enrich"},{"name":"stdout","follows":"enrich"},{"name":"prometheus","follows":"enrich"},{"name":"kafka-export-0","follows":"enrich"},{"name":"IPFIX-export-1","follows":"enrich"}]`,
+		`[{"name":"grpc"},{"name":"extract_conntrack","follows":"grpc"},{"name":"enrich","follows":"extract_conntrack"},{"name":"loki","follows":"enrich"},{"name":"stdout","follows":"enrich"},{"name":"prometheus","follows":"enrich"},{"name":"kafka-export-0","follows":"enrich"},{"name":"ipfix-export-1","follows":"enrich"}]`,
 		pipeline,
 	)
 

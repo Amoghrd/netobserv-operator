@@ -15,7 +15,7 @@ IMAGE_REGISTRY ?= quay.io
 REPO ?= $(IMAGE_REGISTRY)/$(IMAGE_ORG)
 
 # Component versions to use in bundle / release (do not use $VERSION for that)
-BUNDLE_VERSION ?= 1.11.3-community
+BUNDLE_VERSION ?= 1.11.4-community
 # console plugin
 export PLG_VERSION ?= v${BUNDLE_VERSION}
 # flowlogs-pipeline
@@ -219,7 +219,7 @@ kustomize: ## Download kustomize locally if necessary.
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.
-	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.23)
 
 # go-install-tool will 'go install' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST))))
@@ -284,7 +284,7 @@ manifests: YQ controller-gen ## Generate WebhookConfiguration, ClusterRole and C
 	$(CONTROLLER_GEN) \
 	rbac:roleName=manager-role \
 	crd:crdVersions=v1 \
-	paths="./..." \
+	paths="./api/..." \
 	output:crd:artifacts:config=config/crd/bases \
 	output:webhook:dir=./config/webhook \
 	webhook
@@ -296,7 +296,7 @@ manifests: YQ controller-gen ## Generate WebhookConfiguration, ClusterRole and C
 
 gencode: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 ifndef SKIP_CODE_GEN
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/..."
 endif
 
 doc: CRDOC ## Generate markdown documentation
@@ -342,7 +342,7 @@ lint: prereqs ## Run linter (golangci-lint).
 	./bin/golangci-lint-${GOLANGCI_LINT_VERSION} run --timeout 5m ./...
 
 test: envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverpkg=./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./api/... ./internal/... -coverpkg="./api/... ./internal/..." -coverprofile cover.out
 
 coverage-report: ## Generate coverage report
 	go tool cover --func=./cover.out
@@ -408,7 +408,8 @@ set-manager-images: kustomize ## Update image references
 	$(SED) -i -r '/RELATED_IMAGE_EBPF_AGENT$$/{ n; s~value:.+$$~value: quay.io/netobserv/netobserv-ebpf-agent:$(BPF_VERSION)~}' ./config/manager/manager.yaml
 	$(SED) -i -r '/RELATED_IMAGE_FLOWLOGS_PIPELINE$$/{ n; s~value:.+$$~value: quay.io/netobserv/flowlogs-pipeline:$(FLP_VERSION)~}' ./config/manager/manager.yaml
 	$(SED) -i -r '/RELATED_IMAGE_CONSOLE_PLUGIN$$/{ n; s~value:.+$$~value: quay.io/netobserv/network-observability-console-plugin:$(PLG_VERSION)~}' ./config/manager/manager.yaml
-	$(SED) -i -r '/RELATED_IMAGE_CONSOLE_PLUGIN_COMPAT$$/{ n; s~value:.+$$~value: quay.io/netobserv/network-observability-console-plugin:$(PLG_VERSION)-pf4~}' ./config/manager/manager.yaml
+	$(SED) -i -r '/RELATED_IMAGE_CONSOLE_PLUGIN_PF4$$/{ n; s~value:.+$$~value: quay.io/netobserv/network-observability-console-plugin:$(PLG_VERSION)-pf4~}' ./config/manager/manager.yaml
+	$(SED) -i -r '/RELATED_IMAGE_CONSOLE_PLUGIN_PF5$$/{ n; s~value:.+$$~value: quay.io/netobserv/network-observability-console-plugin:$(PLG_VERSION)-pf5~}' ./config/manager/manager.yaml
 
 deploy: BPF_VERSION=main
 deploy: FLP_VERSION=main

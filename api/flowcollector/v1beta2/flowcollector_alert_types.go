@@ -111,9 +111,45 @@ type HealthRuleThresholds struct {
 	Critical string `json:"critical,omitempty"`
 }
 
-// removeDisabledFeatureMetrics removes metrics based on disabled features
+// GetDefaultMetrics returns the default metrics filtered by enabled features
+func (s *FlowCollectorSpec) GetDefaultMetrics() []string {
+	var list []string
+	if s.UseLoki() {
+		list = append(list, DefaultIncludeList...)
+	} else {
+		// When loki is disabled, increase what's available through metrics by default, to minimize the loss of information
+		list = append(list, DefaultIncludeListLokiDisabled...)
+	}
+	return s.removeDisabledFeatureMetrics(list)
+}
+
+func (s *FlowCollectorSpec) GetIncludeList() []string {
+	var list []string
+	if s.Processor.Metrics.IncludeList == nil {
+		list = s.GetDefaultMetrics()
+
+		// AdditionalIncludeList only applies when using defaults (IncludeList is not set)
+		if s.Processor.Metrics.AdditionalIncludeList != nil {
+			for _, m := range *s.Processor.Metrics.AdditionalIncludeList {
+				metricName := string(m)
+				if !slices.Contains(list, metricName) {
+					list = append(list, metricName)
+				}
+			}
+		}
+	} else {
+		// IncludeList is set - use it exclusively (overwrite defaults)
+		// AdditionalIncludeList is ignored when IncludeList is set
+		for _, m := range *s.Processor.Metrics.IncludeList {
+			list = append(list, string(m))
+		}
+		list = s.removeDisabledFeatureMetrics(list)
+	}
+	return list
+}
+
 func (s *FlowCollectorSpec) removeDisabledFeatureMetrics(list []string) []string {
-	if !s.Agent.EBPF.IsPktDropEnabled() {
+	if !s.Agent.EBPF.IsPktDropEnabled() && !s.Agent.EBPF.IsNetworkEventsEnabled() {
 		list = removeMetricsByPattern(list, "_drop_")
 	}
 	if !s.Agent.EBPF.IsFlowRTTEnabled() {
@@ -131,30 +167,8 @@ func (s *FlowCollectorSpec) removeDisabledFeatureMetrics(list []string) []string
 	if !s.Agent.EBPF.IsIPSecEnabled() {
 		list = removeMetricsByPattern(list, "_ipsec_")
 	}
-	return list
-}
-
-// GetDefaultMetrics returns the default metrics filtered by enabled features
-func (s *FlowCollectorSpec) GetDefaultMetrics() []string {
-	var list []string
-	if s.UseLoki() {
-		list = append(list, DefaultIncludeList...)
-	} else {
-		// When loki is disabled, increase what's available through metrics by default, to minimize the loss of information
-		list = append(list, DefaultIncludeListLokiDisabled...)
-	}
-	return s.removeDisabledFeatureMetrics(list)
-}
-
-func (s *FlowCollectorSpec) GetIncludeList() []string {
-	var list []string
-	if s.Processor.Metrics.IncludeList == nil {
-		list = s.GetDefaultMetrics()
-	} else {
-		for _, m := range *s.Processor.Metrics.IncludeList {
-			list = append(list, string(m))
-		}
-		list = s.removeDisabledFeatureMetrics(list)
+	if !s.Agent.EBPF.IsTLSTrackingEnabled() {
+		list = removeMetricsByPattern(list, "_tls_")
 	}
 	return list
 }

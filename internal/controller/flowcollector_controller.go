@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	osv1 "github.com/openshift/api/console/v1"
 	securityv1 "github.com/openshift/api/security/v1"
@@ -135,6 +136,9 @@ func (r *FlowCollectorReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 	}
 
 	r.status.SetReady()
+	if r.mgr.Status.NeedsRequeue() {
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -155,11 +159,17 @@ func (r *FlowCollectorReconciler) reconcile(ctx context.Context, clh *helper.Cli
 
 	lokiStatus := r.lokistackWatcher.Reconcile(ctx, desired)
 
-	// Create reconcilers
+	var cpImage string
+	if desired.Spec.NeedsConsolePluginDeployment(r.mgr.ClusterInfo.HasConsolePlugin()) {
+		var err error
+		cpImage, err = r.mgr.Config.ResolveConsolePluginImage(r.mgr.ClusterInfo)
+		if err != nil {
+			return r.status.Error("ConsolePluginImageError", err)
+		}
+	}
 	cpReconciler := consoleplugin.NewReconciler(reconcilersInfo.NewInstance(
 		map[reconcilers.ImageRef]string{
-			reconcilers.MainImage:                r.mgr.Config.ConsolePluginImage,
-			reconcilers.ConsolePluginCompatImage: r.mgr.Config.ConsolePluginCompatImage,
+			reconcilers.MainImage: cpImage,
 		},
 		r.mgr.Status.ForComponent(status.WebConsole),
 	))
@@ -185,7 +195,7 @@ func (r *FlowCollectorReconciler) reconcile(ctx context.Context, clh *helper.Cli
 	}
 
 	// Console plugin
-	if err := cpReconciler.Reconcile(ctx, desired, lokiStatus); err != nil {
+	if err := cpReconciler.Reconcile(ctx, desired, &lokiStatus); err != nil {
 		return err
 	}
 

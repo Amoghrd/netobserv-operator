@@ -431,6 +431,13 @@ type FlowCollectorKafka struct {
 	// Kafka topic to use. It must exist. NetObserv does not create it.
 	Topic string `json:"topic"`
 
+	// +kubebuilder:validation:Enum:="none";"gzip";"snappy";"lz4";"zstd"
+	// +kubebuilder:default:="none"
+	// Compression codec to use when producing messages to Kafka.
+	// Accepted values are: `none` (default), `gzip`, `snappy`, `lz4`, `zstd`.
+	// +optional
+	Compression string `json:"compression,omitempty"`
+
 	// TLS and mTLS client configuration. When using TLS, verify that the address matches the Kafka port used for TLS, generally 9093.
 	// We recommend the use of mTLS for higher security standards.
 	// +optional
@@ -589,7 +596,7 @@ type MetricsServerConfig struct {
 }
 
 // Metric name. More information in https://github.com/netobserv/netobserv-operator/blob/main/docs/Metrics.md.
-// +kubebuilder:validation:Enum:="namespace_egress_bytes_total";"namespace_egress_packets_total";"namespace_ingress_bytes_total";"namespace_ingress_packets_total";"namespace_flows_total";"node_egress_bytes_total";"node_egress_packets_total";"node_ingress_bytes_total";"node_ingress_packets_total";"node_flows_total";"workload_egress_bytes_total";"workload_egress_packets_total";"workload_ingress_bytes_total";"workload_ingress_packets_total";"workload_flows_total";"namespace_drop_bytes_total";"namespace_drop_packets_total";"node_drop_bytes_total";"node_drop_packets_total";"workload_drop_bytes_total";"workload_drop_packets_total";"namespace_rtt_seconds";"node_rtt_seconds";"workload_rtt_seconds";"namespace_dns_latency_seconds";"node_dns_latency_seconds";"workload_dns_latency_seconds";"node_network_policy_events_total";"namespace_network_policy_events_total";"workload_network_policy_events_total";"node_ipsec_flows_total";"namespace_ipsec_flows_total";"workload_ipsec_flows_total";"node_to_node_ingress_flows_total"
+// +kubebuilder:validation:Enum:="namespace_egress_bytes_total";"namespace_egress_packets_total";"namespace_ingress_bytes_total";"namespace_ingress_packets_total";"namespace_flows_total";"node_egress_bytes_total";"node_egress_packets_total";"node_ingress_bytes_total";"node_ingress_packets_total";"node_flows_total";"workload_egress_bytes_total";"workload_egress_packets_total";"workload_ingress_bytes_total";"workload_ingress_packets_total";"workload_flows_total";"namespace_drop_bytes_total";"namespace_drop_packets_total";"node_drop_bytes_total";"node_drop_packets_total";"workload_drop_bytes_total";"workload_drop_packets_total";"namespace_rtt_seconds";"node_rtt_seconds";"workload_rtt_seconds";"namespace_dns_latency_seconds";"node_dns_latency_seconds";"workload_dns_latency_seconds";"node_network_policy_events_total";"namespace_network_policy_events_total";"workload_network_policy_events_total";"node_ipsec_flows_total";"namespace_ipsec_flows_total";"workload_ipsec_flows_total";"node_tls_flows_total";"namespace_tls_flows_total";"workload_tls_flows_total";"node_to_node_ingress_flows_total"
 type FLPMetric string
 
 // `FLPMetrics` define the desired FLP configuration regarding metrics
@@ -610,6 +617,16 @@ type FLPMetrics struct {
 	// More information, with full list of available metrics: https://github.com/netobserv/netobserv-operator/blob/main/docs/Metrics.md
 	// +optional
 	IncludeList *[]FLPMetric `json:"includeList,omitempty"`
+
+	// `additionalIncludeList` is a list of metric names to include in addition to the default metrics.
+	// Unlike `includeList`, this appends to the default list rather than replacing it.
+	// This field is mutually exclusive with `includeList`. If `includeList` is set, `additionalIncludeList` is ignored.
+	// The names correspond to the names in Prometheus without the prefix. For example,
+	// `namespace_egress_packets_total` shows up as `netobserv_namespace_egress_packets_total` in Prometheus.
+	// Note that the more metrics you add, the bigger is the impact on Prometheus workload resources.
+	// More information, with full list of available metrics: https://github.com/netobserv/netobserv-operator/blob/main/docs/Metrics.md
+	// +optional
+	AdditionalIncludeList *[]FLPMetric `json:"additionalIncludeList,omitempty"`
 
 	// `disableAlerts` is a list of alert groups that should be disabled from the default set of alerts.
 	// Possible values are: `NetObservNoFlows`, `NetObservLokiError`, `PacketDropsByKernel`, `PacketDropsByDevice`, `IPsecErrors`, `NetpolDenied`,
@@ -1607,12 +1624,103 @@ type FlowCollectorExecution struct {
 	Mode ExecutionMode `json:"mode"`
 }
 
+// `FlowCollectorComponentStatus` represents the status of a single operator component.
+type FlowCollectorComponentStatus struct {
+	// `state` reports the overall health of the component.
+	// +kubebuilder:validation:Enum:="Ready";"InProgress";"Failure";"Degraded";"Unknown";"Unused"
+	State string `json:"state"`
+
+	// `reason` is a one-word CamelCase reason for the component's current state.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+
+	// `message` is a human-readable description of the component's current state.
+	// +optional
+	Message string `json:"message,omitempty"`
+
+	// `desiredReplicas` is the desired number of replicas (for Deployments) or nodes (for DaemonSets).
+	// +optional
+	DesiredReplicas *int32 `json:"desiredReplicas,omitempty"`
+
+	// `readyReplicas` is the number of ready replicas (for Deployments) or up-to-date nodes (for DaemonSets).
+	// +optional
+	ReadyReplicas *int32 `json:"readyReplicas,omitempty"`
+
+	// `unhealthyPodCount` is the number of pods in a degraded state (CrashLoopBackOff, OOMKilled, etc.).
+	// +optional
+	UnhealthyPodCount int32 `json:"unhealthyPodCount,omitempty"`
+
+	// `podIssues` is a summary of unhealthy pod issues (e.g., "3 pods CrashLoopBackOff: kafka connection refused").
+	// +optional
+	PodIssues string `json:"podIssues,omitempty"`
+}
+
+// `FlowCollectorExporterStatus` represents the status of a configured exporter.
+type FlowCollectorExporterStatus struct {
+	// `name` is a generated identifier for this exporter (e.g., "kafka-export-0"), derived from its type and position in spec.exporters.
+	Name string `json:"name"`
+
+	// `type` is the exporter type (Kafka, IPFIX, OpenTelemetry).
+	// +kubebuilder:validation:Enum:="Kafka";"IPFIX";"OpenTelemetry"
+	Type string `json:"type"`
+
+	// `state` reports the health of this exporter.
+	// +kubebuilder:validation:Enum:="Ready";"InProgress";"Failure";"Degraded";"Unknown"
+	State string `json:"state"`
+
+	// `reason` is a one-word CamelCase reason for the exporter's current state.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+
+	// `message` is a human-readable description of the exporter's current state.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
+// `FlowCollectorComponentsStatus` groups the status of operator-managed components.
+type FlowCollectorComponentsStatus struct {
+	// `agent` reports the status of the eBPF agent component.
+	// +optional
+	Agent *FlowCollectorComponentStatus `json:"agent,omitempty"`
+
+	// `processor` reports the status of the flowlogs-pipeline component.
+	// +optional
+	Processor *FlowCollectorComponentStatus `json:"processor,omitempty"`
+
+	// `plugin` reports the status of the console plugin component.
+	// +optional
+	Plugin *FlowCollectorComponentStatus `json:"plugin,omitempty"`
+}
+
+// `FlowCollectorIntegrationsStatus` groups the status of external integrations.
+type FlowCollectorIntegrationsStatus struct {
+	// `loki` reports the status of the Loki integration.
+	// +optional
+	Loki *FlowCollectorComponentStatus `json:"loki,omitempty"`
+
+	// `monitoring` reports the status of monitoring (dashboards, ServiceMonitor, etc.).
+	// +optional
+	Monitoring *FlowCollectorComponentStatus `json:"monitoring,omitempty"`
+
+	// `exporters` reports the status of configured exporters.
+	// +optional
+	Exporters []FlowCollectorExporterStatus `json:"exporters,omitempty"`
+}
+
 // `FlowCollectorStatus` defines the observed state of FlowCollector
 type FlowCollectorStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// `conditions` represents the latest available observations of an object's state
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// `components` reports the status of operator-managed components (agent, processor, plugin).
+	// +optional
+	Components *FlowCollectorComponentsStatus `json:"components,omitempty"`
+
+	// `integrations` reports the status of external integrations (Loki, monitoring, exporters).
+	// +optional
+	Integrations *FlowCollectorIntegrationsStatus `json:"integrations,omitempty"`
 
 	// Namespace where console plugin and flowlogs-pipeline have been deployed.
 	//
@@ -1623,8 +1731,10 @@ type FlowCollectorStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
-// +kubebuilder:printcolumn:name="Agent",type="string",JSONPath=`.spec.agent.type`
-// +kubebuilder:printcolumn:name="Sampling (EBPF)",type="string",JSONPath=`.spec.agent.ebpf.sampling`
+// +kubebuilder:printcolumn:name="Agent",type="string",JSONPath=`.status.components.agent.state`
+// +kubebuilder:printcolumn:name="Processor",type="string",JSONPath=`.status.components.processor.state`
+// +kubebuilder:printcolumn:name="Plugin",type="string",JSONPath=`.status.components.plugin.state`
+// +kubebuilder:printcolumn:name="Sampling",type="string",JSONPath=`.spec.agent.ebpf.sampling`
 // +kubebuilder:printcolumn:name="Deployment Model",type="string",JSONPath=`.spec.deploymentModel`
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=`.status.conditions[?(@.type=="Ready")].reason`
 // +kubebuilder:printcolumn:name="Warnings",type="string",JSONPath=`.status.conditions[?(@.type=="ConfigurationIssue")].message`

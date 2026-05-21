@@ -894,6 +894,26 @@ func TestValidateFLP(t *testing.T) {
 			},
 		},
 		{
+			name: "Both includeList and additionalIncludeList set",
+			fc: &FlowCollector{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: FlowCollectorSpec{
+					Processor: FlowCollectorFLP{
+						Metrics: FLPMetrics{
+							IncludeList:           &[]FLPMetric{"node_ingress_bytes_total"},
+							AdditionalIncludeList: &[]FLPMetric{"namespace_egress_bytes_total"},
+							DisableAlerts:         []AlertTemplate{AlertNoFlows, AlertLokiError, HealthRuleExternalEgressHighTrend, HealthRuleExternalIngressHighTrend},
+						},
+					},
+				},
+			},
+			expectedWarnings: admission.Warnings{
+				MetricsIncludeListWarning,
+			},
+		},
+		{
 			name:       "Missing provided TLS config",
 			ocpVersion: "4.18.0",
 			fc: &FlowCollector{

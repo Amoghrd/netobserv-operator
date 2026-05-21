@@ -3,6 +3,7 @@ package ebpf
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -55,6 +56,7 @@ const (
 	envKafkaTLSUserKeyPath        = "KAFKA_TLS_USER_KEY_PATH"
 	envKafkaEnableSASL            = "KAFKA_ENABLE_SASL"
 	envKafkaSASLType              = "KAFKA_SASL_TYPE"
+	envKafkaCompression           = "KAFKA_COMPRESSION"
 	envKafkaSASLIDPath            = "KAFKA_SASL_CLIENT_ID_PATH"
 	envKafkaSASLSecretPath        = "KAFKA_SASL_CLIENT_SECRET_PATH"
 	envLogLevel                   = "LOG_LEVEL"
@@ -143,9 +145,13 @@ func (c *AgentController) Reconcile(ctx context.Context, target *flowslatest.Flo
 	err := c.reconcile(ctx, target)
 	if err != nil {
 		rlog.Error(err, "AgentController reconcile failure")
-		// Set status failure unless it was already set
 		if !c.Status.HasFailure() {
-			c.Status.SetFailure("AgentControllerError", err.Error())
+			reason := "AgentControllerError"
+			var ke *reconcilers.KafkaError
+			if stderrors.As(err, &ke) {
+				reason = "AgentKafkaError"
+			}
+			c.Status.SetFailure(reason, err.Error())
 		}
 		return err
 	}
@@ -204,7 +210,7 @@ func (c *AgentController) reconcile(ctx context.Context, target *flowslatest.Flo
 		err = c.UpdateIfOwned(ctx, current, desired)
 	default:
 		rlog.Info("action: nothing to do")
-		c.Status.CheckDaemonSetProgress(current)
+		c.Status.CheckDaemonSetHealth(ctx, c.Client, current)
 	}
 
 	if err != nil {
@@ -308,6 +314,7 @@ func (c *AgentController) desired(ctx context.Context, coll *flowslatest.FlowCol
 	if coll.Spec.Agent.EBPF.IsAgentFeatureEnabled(flowslatest.PacketDrop) && !coll.Spec.Agent.EBPF.IsEbpfManagerEnabled() {
 		if !coll.Spec.Agent.EBPF.Privileged {
 			rlog.Error(fmt.Errorf("invalid configuration"), "To use PacketsDrop feature privileged mode needs to be enabled")
+			c.Status.SetDegraded("InvalidConfiguration", "PacketDrop feature requires privileged mode")
 		} else {
 			volume := corev1.Volume{
 				Name: bpfTraceMountName,
@@ -332,6 +339,7 @@ func (c *AgentController) desired(ctx context.Context, coll *flowslatest.FlowCol
 		coll.Spec.Agent.EBPF.IsAgentFeatureEnabled(flowslatest.UDNMapping) {
 		if !coll.Spec.Agent.EBPF.Privileged {
 			rlog.Error(fmt.Errorf("invalid configuration"), "To use NetworkEvents or UDNMapping features, privileged mode needs to be enabled")
+			c.Status.SetDegraded("InvalidConfiguration", "NetworkEvents/UDNMapping features require privileged mode")
 		} else {
 			hostPath := advancedConfig.Env[envOVNObservHostMountPath]
 			if hostPath == "" {
@@ -457,13 +465,14 @@ func (c *AgentController) envConfig(ctx context.Context, coll *flowslatest.FlowC
 			corev1.EnvVar{Name: envKafkaBatchSize, Value: strconv.Itoa(coll.Spec.Agent.EBPF.KafkaBatchSize)},
 			// For easier user configuration, we can assume a constant message size per flow (~100B in protobuf)
 			corev1.EnvVar{Name: envKafkaBatchMessages, Value: strconv.Itoa(coll.Spec.Agent.EBPF.KafkaBatchSize / averageMessageSize)},
+			corev1.EnvVar{Name: envKafkaCompression, Value: coll.Spec.Kafka.Compression},
 		)
 		if coll.Spec.Kafka.TLS.Enable {
 			// Annotate pod with certificate reference so that it is reloaded if modified
 			// If user cert is provided, it will use mTLS. Else, simple TLS (the userDigest and paths will be empty)
 			caDigest, userDigest, err := c.Watcher.ProcessMTLSCerts(ctx, c.Client, &coll.Spec.Kafka.TLS, c.PrivilegedNamespace())
 			if err != nil {
-				return nil, err
+				return nil, reconcilers.WrapKafkaError(err)
 			}
 			annots[watchers.Annotation("kafka-ca")] = caDigest
 			annots[watchers.Annotation("kafka-user")] = userDigest
@@ -482,7 +491,7 @@ func (c *AgentController) envConfig(ctx context.Context, coll *flowslatest.FlowC
 			// Annotate pod with secret reference so that it is reloaded if modified
 			d1, d2, err := c.Watcher.ProcessSASL(ctx, c.Client, sasl, c.PrivilegedNamespace())
 			if err != nil {
-				return nil, err
+				return nil, reconcilers.WrapKafkaError(err)
 			}
 			annots[watchers.Annotation("kafka-sd1")] = d1
 			annots[watchers.Annotation("kafka-sd2")] = d2
@@ -525,8 +534,11 @@ func (c *AgentController) envConfig(ctx context.Context, coll *flowslatest.FlowC
 				// Send to FLP service using TLS
 				caPath := c.volumes.AddVolume(ca, "netobserv-ca")
 				config = append(config, corev1.EnvVar{Name: envTargetTLSCACertPath, Value: caPath})
+				// Ideally, the certificate is installed in the privileged namespace already. Trust-manager can be used for that (used in the provided helm chart)
+				// In OpenShift, we currently don't assume that (trust-manager isn't available there at this time), so we'll copy it
+				assumeCertInstalled := !c.ClusterInfo.IsOpenShift()
 				if clientCert == nil {
-					if ca.Namespace != "" {
+					if ca.Namespace != "" && !assumeCertInstalled {
 						// Annotate pod with CA ref
 						caDigest, err := c.Watcher.ProcessFileReference(ctx, c.Client, *ca, c.PrivilegedNamespace())
 						if err != nil {
@@ -539,13 +551,15 @@ func (c *AgentController) envConfig(ctx context.Context, coll *flowslatest.FlowC
 					config = append(config, corev1.EnvVar{Name: envTargetTLSUserCertPath, Value: certPath})
 					config = append(config, corev1.EnvVar{Name: envTargetTLSUserKeyPath, Value: keyPath})
 
-					// Annotate pod with certificate reference so that it is reloaded if modified
-					caDigest, userDigest, err := c.Watcher.ProcessMTLSCertsFromRefs(ctx, c.Client, ca, clientCert, c.PrivilegedNamespace())
-					if err != nil {
-						return nil, err
+					if !assumeCertInstalled {
+						// Annotate pod with certificate reference so that it is reloaded if modified
+						caDigest, userDigest, err := c.Watcher.ProcessMTLSCertsFromRefs(ctx, c.Client, ca, clientCert, c.PrivilegedNamespace())
+						if err != nil {
+							return nil, err
+						}
+						annots[watchers.Annotation("mtls-ca")] = caDigest
+						annots[watchers.Annotation("mtls-user")] = userDigest
 					}
-					annots[watchers.Annotation("mtls-ca")] = caDigest
-					annots[watchers.Annotation("mtls-user")] = userDigest
 				}
 			}
 			config = append(config,
