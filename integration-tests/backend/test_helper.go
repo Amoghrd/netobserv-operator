@@ -3,7 +3,6 @@ package e2etests
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -136,15 +135,4 @@ func deleteNamespace(ns string) {
 		return false, nil
 	})
 	assertWaitPollNoErr(err, fmt.Sprintf("Namespace %s is not deleted in 3 minutes", ns))
-}
-
-// isWebhookTimeoutError checks if the error is a webhook timeout error
-func isWebhookTimeoutError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errMsg := strings.ToLower(err.Error())
-	return strings.Contains(errMsg, "webhook") &&
-		(strings.Contains(errMsg, "timeout") ||
-			strings.Contains(errMsg, "deadline exceeded"))
 }
