@@ -124,8 +124,8 @@ func deleteNamespace(ns string) {
 		e2e.Logf("Warning: All %d attempts to delete namespace %s failed with webhook timeout, checking if deletion succeeded anyway", maxRetries, ns)
 	}
 
-	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
-		_, getErr := k8sClient.CoreV1().Namespaces().Get(context.Background(), ns, metav1.GetOptions{})
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+		_, getErr := k8sClient.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
 		if getErr != nil {
 			if apierrors.IsNotFound(getErr) {
 				return true, nil

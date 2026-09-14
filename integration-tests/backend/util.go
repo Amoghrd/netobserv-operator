@@ -717,8 +717,8 @@ func waitUntilDeploymentReady(deployment, ns string) {
 // waitForNetworkPolicy waits for a network policy to exist
 func waitForNetworkPolicy(namespace, name string, timeoutSeconds int) error {
 	timeout := time.Duration(timeoutSeconds) * time.Second
-	return wait.PollUntilContextTimeout(context.Background(), 2*time.Second, timeout, false, func(context.Context) (bool, error) {
-		_, err := k8sClient.NetworkingV1().NetworkPolicies(namespace).Get(context.Background(), name, metav1.GetOptions{})
+	return wait.PollUntilContextTimeout(context.Background(), 2*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
+		_, err := k8sClient.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return false, nil
@@ -1691,7 +1691,7 @@ func isWebhookTimeoutError(err error) bool {
 		return false
 	}
 	errMsg := strings.ToLower(err.Error())
-	return strings.Contains(errMsg, "webhook") &&
-		(strings.Contains(errMsg, "timeout") ||
-			strings.Contains(errMsg, "deadline exceeded"))
+	// Match specific webhook call timeout patterns, not generic webhook rejections
+	return (strings.Contains(errMsg, "calling webhook") || strings.Contains(errMsg, "failed calling webhook")) &&
+		(strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "deadline exceeded"))
 }
