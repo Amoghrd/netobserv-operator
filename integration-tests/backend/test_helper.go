@@ -99,22 +99,25 @@ func deleteNamespace(ns string) {
 	var deleteErr error
 	for i := 0; i < maxRetries; i++ {
 		deleteErr = k8sClient.CoreV1().Namespaces().Delete(context.Background(), ns, metav1.DeleteOptions{})
-		if deleteErr != nil {
-			if apierrors.IsNotFound(deleteErr) {
-				return // Already deleted
-			}
-			if isWebhookTimeoutError(deleteErr) && i < maxRetries-1 {
-				e2e.Logf("Webhook timeout deleting namespace %s (attempt %d/%d), retrying in 10s...", ns, i+1, maxRetries)
-				time.Sleep(10 * time.Second) // Wait before retry
-				continue
-			}
-			if !isWebhookTimeoutError(deleteErr) {
-				o.Expect(deleteErr).NotTo(o.HaveOccurred())
-				return
-			}
-		} else {
+		if deleteErr == nil {
 			break // Success
 		}
+		if apierrors.IsNotFound(deleteErr) {
+			return // Already deleted
+		}
+		if isWebhookTimeoutError(deleteErr) && i < maxRetries-1 {
+			e2e.Logf("Webhook timeout deleting namespace %s (attempt %d/%d), retrying in 10s...", ns, i+1, maxRetries)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		// Any other error or webhook timeout on last attempt - break and handle below
+		break
+	}
+
+	// Fail immediately on non-webhook errors
+	if deleteErr != nil && !isWebhookTimeoutError(deleteErr) {
+		o.Expect(deleteErr).NotTo(o.HaveOccurred())
+		return
 	}
 
 	// If all retries failed with webhook timeout, log but continue to verify deletion
