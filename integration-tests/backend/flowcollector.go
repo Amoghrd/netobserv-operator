@@ -60,6 +60,7 @@ type Flowcollector struct {
 	ServiceCASecretName               string
 	ServiceServerCertSecretName       string
 	ServiceClientCertSecretName       string
+	BgpEnrichment                     string
 	Template                          string
 }
 
@@ -146,6 +147,9 @@ type Flowlog struct {
 	TLSTypes       []string `json:"TLSTypes,omitempty"`
 	TLSGroup       string   `json:"TLSGroup,omitempty"`
 	TLSCipherSuite string   `json:"TLSCipherSuite,omitempty"`
+	// BGP ASN
+	SrcASN string `json:"SrcASN,omitempty"`
+	DstASN string `json:"DstASN,omitempty"`
 }
 
 type NetworkEvent struct {

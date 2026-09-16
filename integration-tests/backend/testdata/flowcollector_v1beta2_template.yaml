@@ -36,6 +36,7 @@ objects:
           enabled: true
         multiClusterDeployment: "${{MultiClusterDeployment}}"
         addZone: "${{AddZone}}"
+        bgpEnrichment: "${{BgpEnrichment}}"
         service:
           providedCertificates:
             caFile:
@@ -197,3 +198,6 @@ parameters:
   - name: ServiceClientCertSecretName
     description: "Client certificate secret name for Service mode with Provided certificates"
     value: "prov-ebpf-agent-cert"
+  - name: BgpEnrichment
+    description: "Enable BGP ASN enrichment from FRRConfiguration CRDs"
+    value: "false"
