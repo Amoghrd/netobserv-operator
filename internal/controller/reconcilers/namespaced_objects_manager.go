@@ -39,6 +39,9 @@ type managedObject struct {
 }
 
 func NewNamespacedObjectManager(cmn *Common) *NamespacedObjectManager {
+	// Prefer the active managed enqueuer for FlowCollector controllers. The static
+	// operator reconciler has only an always-enabled enqueuer and still needs to
+	// watch its NetworkPolicy through this manager.
 	var objectEnqueuer enqueuer.Static = cmn.ManagedEnqueuer
 	if objectEnqueuer == nil {
 		objectEnqueuer = cmn.Enqueuer
