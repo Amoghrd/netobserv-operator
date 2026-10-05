@@ -31,7 +31,7 @@ import (
 type Reconciler struct {
 	client.Client
 	mgr              *manager.Manager
-	ctrlQ            enqueuer.FilteredDynamic
+	ctrlQ            enqueuer.Dynamic
 	status           status.Instance
 	currentNamespace string
 }
@@ -222,11 +222,9 @@ func removeFromList(list *corev1.ConfigMapList, i int) {
 
 func (r *Reconciler) namespaceExist(ctx context.Context, nsName string) (*corev1.Namespace, error) {
 	ns := &corev1.Namespace{}
-	if filtered, ok := r.ctrlQ.(enqueuer.FilteredStatic); ok {
-		request := reconcile.Request{NamespacedName: constants.FlowCollectorName}
-		if err := filtered.EnqueueOnChangeIfManaged(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}, request, reconcilers.ManagedObjectEventFilter); err != nil {
-			return nil, err
-		}
+	request := reconcile.Request{NamespacedName: constants.FlowCollectorName}
+	if err := r.ctrlQ.EnqueueOnChange(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}, request, reconcilers.ManagedObjectEventFilter); err != nil {
+		return nil, err
 	}
 	err := r.Get(ctx, types.NamespacedName{Name: nsName}, ns)
 	if err != nil {

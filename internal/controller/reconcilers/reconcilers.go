@@ -302,11 +302,7 @@ func ReconcileNetworkPolicyWithEnqueuer(ctx context.Context, q enqueuer.Static, 
 		watchObject.SetName(name.Name)
 		watchObject.SetNamespace(name.Namespace)
 		request := reconcile.Request{NamespacedName: constants.FlowCollectorName}
-		if filtered, ok := q.(enqueuer.FilteredStatic); ok {
-			if err := filtered.EnqueueOnChangeIfManaged(ctx, watchObject, request, ManagedObjectEventFilter); err != nil {
-				return err
-			}
-		} else if err := q.EnqueueOnChange(ctx, watchObject, request); err != nil {
+		if err := q.EnqueueOnChange(ctx, watchObject, request, ManagedObjectEventFilter); err != nil {
 			return err
 		}
 	}

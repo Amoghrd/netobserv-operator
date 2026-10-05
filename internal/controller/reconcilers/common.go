@@ -18,7 +18,7 @@ import (
 type Common struct {
 	helper.Client
 	Enqueuer        enqueuer.Static
-	ManagedEnqueuer enqueuer.FilteredDynamic
+	ManagedEnqueuer enqueuer.Dynamic
 	Watcher         *watchers.Watcher
 	Namespace       string
 	ClusterInfo     *cluster.Info

@@ -25,7 +25,7 @@ import (
 // NamespacedObjectManager provides some helpers to manage (fetch, delete) namespace-scoped objects
 type NamespacedObjectManager struct {
 	client         client.Client
-	enqueuer       enqueuer.FilteredStatic
+	enqueuer       enqueuer.Static
 	Namespace      string
 	managedObjects []managedObject
 }
@@ -39,13 +39,13 @@ type managedObject struct {
 }
 
 func NewNamespacedObjectManager(cmn *Common) *NamespacedObjectManager {
-	var filteredEnqueuer enqueuer.FilteredStatic = cmn.ManagedEnqueuer
-	if filteredEnqueuer == nil {
-		filteredEnqueuer, _ = cmn.Enqueuer.(enqueuer.FilteredStatic)
+	var objectEnqueuer enqueuer.Static = cmn.ManagedEnqueuer
+	if objectEnqueuer == nil {
+		objectEnqueuer = cmn.Enqueuer
 	}
 	return &NamespacedObjectManager{
 		client:    cmn.Client,
-		enqueuer:  filteredEnqueuer,
+		enqueuer:  objectEnqueuer,
 		Namespace: cmn.Namespace,
 	}
 }
@@ -145,7 +145,7 @@ func (m *NamespacedObjectManager) FetchAll(ctx context.Context) error {
 		ref.placeholder.SetNamespace(m.Namespace)
 		if m.enqueuer != nil {
 			request := reconcile.Request{NamespacedName: constants.FlowCollectorName}
-			if err := m.enqueuer.EnqueueOnChangeIfManaged(ctx, ref.placeholder, request, ref.filter); err != nil {
+			if err := m.enqueuer.EnqueueOnChange(ctx, ref.placeholder, request, ref.filter); err != nil {
 				return err
 			}
 		}

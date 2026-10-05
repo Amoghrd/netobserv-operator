@@ -36,7 +36,7 @@ type Reconciler struct {
 	client.Client
 	mgr              *manager.Manager
 	ctrlQ            enqueuer.Static
-	managedQ         enqueuer.FilteredDynamic
+	managedQ         enqueuer.Dynamic
 	watcher          *watchers.Watcher
 	status           status.Instance
 	currentNamespace string

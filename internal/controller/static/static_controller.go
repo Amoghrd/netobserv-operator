@@ -35,7 +35,7 @@ var (
 type Controller struct {
 	client.Client
 	mgr    *manager.Manager
-	ctrlQ  enqueuer.FilteredStatic
+	ctrlQ  enqueuer.Static
 	status status.Instance
 }
 
@@ -70,12 +70,12 @@ func Start(ctx context.Context, mgr *manager.Manager) (manager.PostCreateHook, e
 	}
 	r.ctrlQ = mgr.NewStaticControllerEnqueuer(ctrlName, controller)
 	request := reconcile.Request{NamespacedName: constants.FlowCollectorName}
-	if err := r.ctrlQ.EnqueueOnChangeIfManaged(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: constants.ControllerName, Namespace: mgr.Config.Namespace}}, request, reconcilers.IgnoreStatusChangeEventFilter); err != nil {
+	if err := r.ctrlQ.EnqueueOnChange(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: constants.ControllerName, Namespace: mgr.Config.Namespace}}, request, reconcilers.IgnoreStatusChangeEventFilter); err != nil {
 		return nil, err
 	}
 	for _, name := range []string{constants.OperatorName, constants.StaticPluginName} {
 		np := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: mgr.Config.Namespace}}
-		if err := r.ctrlQ.EnqueueOnChangeIfManaged(ctx, np, request, reconcilers.OperatorOwnedEventFilter(mgr.Config.Namespace)); err != nil {
+		if err := r.ctrlQ.EnqueueOnChange(ctx, np, request, reconcilers.OperatorOwnedEventFilter(mgr.Config.Namespace)); err != nil {
 			return nil, err
 		}
 	}

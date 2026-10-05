@@ -63,12 +63,12 @@ func (c *Client) ResetActiveWatches(group string) {
 // If checkActive is false, it creates an always-enabled watch, intended for static resource watching.
 // Else, the created watch is ignored when not actively looked-up for in a reconcile loop, so it is intended for dynamic resource watching, such as based on a potentially changing configuration.
 func (c *Client) SafeEnqueueRequestOnEvents(ctx context.Context, group string, ctrl controller.Controller, obj client.Object, req reconcile.Request, checkActive bool) error {
-	return c.SafeEnqueueRequestOnEventsWithFilter(ctx, group, ctrl, obj, req, checkActive, nil)
+	return c.SafeEnqueueRequestOnEventsWithFilter(ctx, group, ctrl, obj, req, checkActive)
 }
 
 // SafeEnqueueRequestOnEventsWithFilter registers an idempotent name-scoped watch and only enqueues
-// requests for events accepted by filter. checkActive retains the dynamic-watch activation behavior.
-func (c *Client) SafeEnqueueRequestOnEventsWithFilter(ctx context.Context, group string, ctrl controller.Controller, obj client.Object, req reconcile.Request, checkActive bool, filter EventFilter) error {
+// requests for events accepted by every filter. checkActive retains the dynamic-watch activation behavior.
+func (c *Client) SafeEnqueueRequestOnEventsWithFilter(ctx context.Context, group string, ctrl controller.Controller, obj client.Object, req reconcile.Request, checkActive bool, filters ...EventFilter) error {
 	gvk, err := c.GroupVersionKindFor(obj)
 	if err != nil {
 		return err
@@ -82,16 +82,15 @@ func (c *Client) SafeEnqueueRequestOnEventsWithFilter(ctx context.Context, group
 
 		if checkActive {
 			// The watch might be registered, but inactive
-			activeFilter := filter
-			filter = func(oldObject, newObject client.Object) bool {
+			filters = append(append([]EventFilter(nil), filters...), func(oldObject, newObject client.Object) bool {
 				obj := newObject
 				if obj == nil {
 					obj = oldObject
 				}
-				return obj != nil && c.idempotentSources.isActive(group, strGVK, obj) && (activeFilter == nil || activeFilter(oldObject, newObject))
-			}
+				return obj != nil && c.idempotentSources.isActive(group, strGVK, obj)
+			})
 		}
-		if err := c.EnqueueRequestOnEventsWithFilter(ctx, ctrl, obj, req, filter); err != nil {
+		if err := c.EnqueueRequestOnEventsWithFilter(ctx, ctrl, obj, req, filters...); err != nil {
 			// Roll back the reservation so a later reconcile can retry.
 			objKey := ipsKey(strGVK, obj)
 			c.idempotentSources.mut.Lock()

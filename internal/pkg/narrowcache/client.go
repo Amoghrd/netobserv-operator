@@ -361,8 +361,8 @@ func objectPredicateFilter(predicate func(client.Object) bool) EventFilter {
 }
 
 // EnqueueRequestOnEventsWithFilter registers a name-scoped watch that enqueues req for matching events.
-func (c *Client) EnqueueRequestOnEventsWithFilter(ctx context.Context, ctrl controller.Controller, obj client.Object, req reconcile.Request, filter EventFilter) error {
-	s, err := c.getSource(ctx, obj, requestEventHandler{request: req, filter: filter}, &req)
+func (c *Client) EnqueueRequestOnEventsWithFilter(ctx context.Context, ctrl controller.Controller, obj client.Object, req reconcile.Request, filters ...EventFilter) error {
+	s, err := c.getSource(ctx, obj, requestEventHandler{request: req, filters: filters}, &req)
 	if err != nil {
 		return fmt.Errorf("could not create narrowcache source for %s/%s/%s: %w", obj.GetObjectKind(), obj.GetNamespace(), obj.GetName(), err)
 	}

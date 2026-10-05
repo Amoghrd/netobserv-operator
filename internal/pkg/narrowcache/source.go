@@ -31,7 +31,7 @@ func (s *NarrowSource) Start(ctx context.Context, q workqueue.TypedRateLimitingI
 
 type requestEventHandler struct {
 	request reconcile.Request
-	filter  EventFilter
+	filters []EventFilter
 }
 
 func (h requestEventHandler) Create(_ context.Context, e event.CreateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
@@ -51,7 +51,10 @@ func (h requestEventHandler) Generic(_ context.Context, e event.GenericEvent, q 
 }
 
 func (h requestEventHandler) enqueue(oldObject, newObject client.Object, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-	if h.filter == nil || h.filter(oldObject, newObject) {
-		q.Add(h.request)
+	for _, filter := range h.filters {
+		if filter != nil && !filter(oldObject, newObject) {
+			return
+		}
 	}
+	q.Add(h.request)
 }

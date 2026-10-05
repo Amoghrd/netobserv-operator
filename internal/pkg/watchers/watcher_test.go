@@ -130,8 +130,12 @@ type Enqueuer struct {
 	ctrl controller.Controller
 }
 
-func (e *Enqueuer) EnqueueOnChange(ctx context.Context, obj client.Object, req reconcile.Request) error {
-	return e.nc.SafeEnqueueRequestOnEvents(ctx, "", e.ctrl, obj, req, true)
+func (e *Enqueuer) EnqueueOnChange(ctx context.Context, obj client.Object, req reconcile.Request, filters ...func(client.Object, client.Object) bool) error {
+	eventFilters := make([]narrowcache.EventFilter, len(filters))
+	for i, filter := range filters {
+		eventFilters[i] = narrowcache.EventFilter(filter)
+	}
+	return e.nc.SafeEnqueueRequestOnEventsWithFilter(ctx, "", e.ctrl, obj, req, true, eventFilters...)
 }
 
 func (e *Enqueuer) ResetActiveWatches() {

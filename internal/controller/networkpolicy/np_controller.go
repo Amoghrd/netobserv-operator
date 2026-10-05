@@ -19,7 +19,7 @@ import (
 type Reconciler struct {
 	client.Client
 	mgr    *manager.Manager
-	ctrlQ  enqueuer.FilteredDynamic
+	ctrlQ  enqueuer.Dynamic
 	status status.Instance
 }
 

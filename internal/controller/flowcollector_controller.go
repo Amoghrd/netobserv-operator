@@ -44,7 +44,7 @@ type FlowCollectorReconciler struct {
 	watcher          *watchers.Watcher
 	ctrl             controller.Controller
 	ctrlQ            enqueuer.Static
-	managedQ         enqueuer.FilteredDynamic
+	managedQ         enqueuer.Dynamic
 	lokistackWatcher *lokistack.Watcher
 }
 

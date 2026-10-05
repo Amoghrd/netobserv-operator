@@ -138,9 +138,9 @@ func TestNameScopedSourceWatchesMissingObject(t *testing.T) {
 	req := reconcile.Request{NamespacedName: client.ObjectKeyFromObject(cm)}
 	src, err := nc.GetSource(ctx, cm, requestEventHandler{
 		request: req,
-		filter: func(oldObject, newObject client.Object) bool {
+		filters: []EventFilter{func(oldObject, newObject client.Object) bool {
 			return oldObject == nil && newObject != nil && newObject.GetName() == "late"
-		},
+		}},
 	})
 	assert.NoError(t, err, "a missing named object should still have a watch source")
 	q := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
@@ -179,14 +179,14 @@ func TestNameScopedSourceFilterSeesOldAndNewCachedObjects(t *testing.T) {
 	filterSawTransition := atomic.Bool{}
 	src, err := nc.GetSource(ctx, cm.DeepCopy(), requestEventHandler{
 		request: req,
-		filter: func(oldObject, newObject client.Object) bool {
+		filters: []EventFilter{func(oldObject, newObject client.Object) bool {
 			oldCM, oldOK := oldObject.(*corev1.ConfigMap)
 			newCM, newOK := newObject.(*corev1.ConfigMap)
 			out := &corev1.ConfigMap{}
 			filterSawTransition.Store(oldOK && newOK && oldCM.Data["key"] == "before" && newCM.Data["key"] == "after" &&
 				nc.Get(ctx, client.ObjectKeyFromObject(cm), out) == nil && out.Data["key"] == "after")
 			return filterSawTransition.Load()
-		},
+		}},
 	})
 	assert.NoError(t, err)
 	q := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
