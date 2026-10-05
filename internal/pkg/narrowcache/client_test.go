@@ -202,10 +202,28 @@ func TestNameScopedSourceFilterSeesOldAndNewCachedObjects(t *testing.T) {
 	q.Done(got)
 }
 
-func TestObjectPredicateFilterUsesDeletedObject(t *testing.T) {
-	deleted := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "watched"}}
-	filter := objectPredicateFilter(func(obj client.Object) bool { return obj.GetName() == "watched" })
-	assert.True(t, filter(deleted, nil), "delete predicates should receive the deleted object")
-	assert.True(t, filter(nil, deleted), "create predicates should receive the created object")
-	assert.False(t, filter(nil, nil))
+func TestRequestEventHandlerRejectsWhenLaterFilterRejects(t *testing.T) {
+	q := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
+	defer q.ShutDown()
+
+	h := requestEventHandler{
+		filters: []EventFilter{
+			func(client.Object, client.Object) bool { return true },
+			func(client.Object, client.Object) bool { return false },
+		},
+	}
+	h.enqueue(nil, nil, q)
+
+	assert.Equal(t, 0, q.Len())
+}
+
+func TestSafeEnqueueRequestOnEventsRejectsUnmanagedGVK(t *testing.T) {
+	nc := &Client{
+		Client:      &gvkClient{},
+		watchedGVKs: map[string]GVKInfo{},
+	}
+	err := nc.SafeEnqueueRequestOnEvents(
+		context.Background(), "", nil, &corev1.Secret{}, reconcile.Request{}, false,
+	)
+	assert.ErrorContains(t, err, "GVK not managed through narrowcache")
 }

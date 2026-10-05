@@ -32,16 +32,6 @@ type Client struct {
 	idempotentSources idempotentSources         // idempotentSources stores registered sources for idempotent enqueue requests
 }
 
-// IsManaged reports whether narrowcache supports name-scoped watches for obj's GVK.
-func (c *Client) IsManaged(obj client.Object) bool {
-	gvk, err := c.GroupVersionKindFor(obj)
-	if err != nil {
-		return false
-	}
-	_, managed := c.watchedGVKs[gvk.String()]
-	return managed
-}
-
 type watchedObject struct {
 	cached   client.Object
 	handlers []handlerOnQueue
@@ -339,29 +329,9 @@ func (c *Client) getSource(ctx context.Context, obj client.Object, h handler.Eve
 	}, nil
 }
 
-// EnqueueRequestOnEvents creates a Source from which the controller will enqueue reconcile requests upon change.
+// EnqueueRequestOnEvents registers a name-scoped watch that enqueues req for matching events.
 // This function is NOT idempotent, it should be called at init, outside of any reconcile loop.
-// The variant SafeEnqueueRequestOnEvents can be called safely from a reconcile loop.
-func (c *Client) EnqueueRequestOnEvents(ctx context.Context, ctrl controller.Controller, obj client.Object, req reconcile.Request, predicate func(client.Object) bool) error {
-	filter := EventFilter(nil)
-	if predicate != nil {
-		filter = objectPredicateFilter(predicate)
-	}
-	return c.EnqueueRequestOnEventsWithFilter(ctx, ctrl, obj, req, filter)
-}
-
-func objectPredicateFilter(predicate func(client.Object) bool) EventFilter {
-	return func(oldObject, newObject client.Object) bool {
-		obj := newObject
-		if obj == nil {
-			obj = oldObject
-		}
-		return obj != nil && predicate(obj)
-	}
-}
-
-// EnqueueRequestOnEventsWithFilter registers a name-scoped watch that enqueues req for matching events.
-func (c *Client) EnqueueRequestOnEventsWithFilter(ctx context.Context, ctrl controller.Controller, obj client.Object, req reconcile.Request, filters ...EventFilter) error {
+func (c *Client) EnqueueRequestOnEvents(ctx context.Context, ctrl controller.Controller, obj client.Object, req reconcile.Request, filters ...EventFilter) error {
 	s, err := c.getSource(ctx, obj, requestEventHandler{request: req, filters: filters}, &req)
 	if err != nil {
 		return fmt.Errorf("could not create narrowcache source for %s/%s/%s: %w", obj.GetObjectKind(), obj.GetNamespace(), obj.GetName(), err)

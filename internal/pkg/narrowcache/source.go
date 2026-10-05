@@ -14,7 +14,7 @@ import (
 
 // EventFilter receives the previous and current object for an event. Create events have a nil previous object,
 // delete events have a nil current object, and update events have both values populated.
-type EventFilter func(oldObject, newObject client.Object) bool
+type EventFilter = func(oldObject, newObject client.Object) bool
 
 type NarrowSource struct {
 	source.Source

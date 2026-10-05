@@ -62,13 +62,8 @@ func (c *Client) ResetActiveWatches(group string) {
 // SafeEnqueueRequestOnEvents is like EnqueueRequestOnEvents with idempotency: it ensures there is no existing enqueuing callbacks already created for that object.
 // If checkActive is false, it creates an always-enabled watch, intended for static resource watching.
 // Else, the created watch is ignored when not actively looked-up for in a reconcile loop, so it is intended for dynamic resource watching, such as based on a potentially changing configuration.
-func (c *Client) SafeEnqueueRequestOnEvents(ctx context.Context, group string, ctrl controller.Controller, obj client.Object, req reconcile.Request, checkActive bool) error {
-	return c.SafeEnqueueRequestOnEventsWithFilter(ctx, group, ctrl, obj, req, checkActive)
-}
-
-// SafeEnqueueRequestOnEventsWithFilter registers an idempotent name-scoped watch and only enqueues
-// requests for events accepted by every filter. checkActive retains the dynamic-watch activation behavior.
-func (c *Client) SafeEnqueueRequestOnEventsWithFilter(ctx context.Context, group string, ctrl controller.Controller, obj client.Object, req reconcile.Request, checkActive bool, filters ...EventFilter) error {
+// filters, if provided, must all accept the event.
+func (c *Client) SafeEnqueueRequestOnEvents(ctx context.Context, group string, ctrl controller.Controller, obj client.Object, req reconcile.Request, checkActive bool, filters ...EventFilter) error {
 	gvk, err := c.GroupVersionKindFor(obj)
 	if err != nil {
 		return err
@@ -90,7 +85,7 @@ func (c *Client) SafeEnqueueRequestOnEventsWithFilter(ctx context.Context, group
 				return obj != nil && c.idempotentSources.isActive(group, strGVK, obj)
 			})
 		}
-		if err := c.EnqueueRequestOnEventsWithFilter(ctx, ctrl, obj, req, filters...); err != nil {
+		if err := c.EnqueueRequestOnEvents(ctx, ctrl, obj, req, filters...); err != nil {
 			// Roll back the reservation so a later reconcile can retry.
 			objKey := ipsKey(strGVK, obj)
 			c.idempotentSources.mut.Lock()
@@ -100,5 +95,5 @@ func (c *Client) SafeEnqueueRequestOnEventsWithFilter(ctx context.Context, group
 		}
 		return nil
 	}
-	return fmt.Errorf("cannot configure IdempotentEnqueueRequestOnEvents on %s: GVK not managed through narrowcache", strGVK)
+	return fmt.Errorf("cannot configure SafeEnqueueRequestOnEvents on %s: GVK not managed through narrowcache", strGVK)
 }

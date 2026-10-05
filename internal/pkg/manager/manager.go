@@ -86,6 +86,7 @@ func NewManager(
 		narrowcache.HorizontalPodAutoscalers,
 		narrowcache.Namespaces,
 		narrowcache.NetworkPolicies,
+		narrowcache.PersistentVolumeClaims,
 		narrowcache.Roles,
 		narrowcache.RoleBindings,
 		narrowcache.Secrets,
@@ -176,14 +177,7 @@ func (m *Manager) NewStaticControllerEnqueuer(group string, ctrl controller.Cont
 }
 
 func (c *StaticControllerEnqueuer) EnqueueOnChange(ctx context.Context, obj client.Object, req reconcile.Request, filters ...func(client.Object, client.Object) bool) error {
-	if len(filters) > 0 && !c.nc.IsManaged(obj) {
-		return nil
-	}
-	eventFilters := make([]narrowcache.EventFilter, len(filters))
-	for i, filter := range filters {
-		eventFilters[i] = narrowcache.EventFilter(filter)
-	}
-	return c.nc.SafeEnqueueRequestOnEventsWithFilter(ctx, c.group, c.ctrl, obj, req, false, eventFilters...)
+	return c.nc.SafeEnqueueRequestOnEvents(ctx, c.group, c.ctrl, obj, req, false, filters...)
 }
 
 // DynamicControllerEnqueuer creates a dynamic enqueuer (implements enqueuer.Dynamic),
@@ -201,14 +195,7 @@ func (m *Manager) NewDynamicControllerEnqueuer(group string, ctrl controller.Con
 }
 
 func (c *DynamicControllerEnqueuer) EnqueueOnChange(ctx context.Context, obj client.Object, req reconcile.Request, filters ...func(client.Object, client.Object) bool) error {
-	if len(filters) > 0 && !c.nc.IsManaged(obj) {
-		return nil
-	}
-	eventFilters := make([]narrowcache.EventFilter, len(filters))
-	for i, filter := range filters {
-		eventFilters[i] = narrowcache.EventFilter(filter)
-	}
-	return c.nc.SafeEnqueueRequestOnEventsWithFilter(ctx, c.group, c.ctrl, obj, req, true, eventFilters...)
+	return c.nc.SafeEnqueueRequestOnEvents(ctx, c.group, c.ctrl, obj, req, true, filters...)
 }
 
 func (c *DynamicControllerEnqueuer) ResetActiveWatches() {

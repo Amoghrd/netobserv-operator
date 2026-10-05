@@ -35,6 +35,7 @@ type managedObject struct {
 	kind        string
 	placeholder client.Object
 	filter      func(client.Object, client.Object) bool
+	watch       bool
 	found       bool
 }
 
@@ -50,15 +51,20 @@ func NewNamespacedObjectManager(cmn *Common) *NamespacedObjectManager {
 // This is only for namespace-scoped objects that are installed in the desired namespace (in FlowCollector CRD: spec.namespace)
 // Cluster-scope objects, or objects installed in a different namespace (e.g. OVS configmap) should not be registered with this function.
 func (m *NamespacedObjectManager) AddManagedObject(name string, placeholder client.Object) {
-	m.AddManagedObjectWithFilter(name, placeholder, ManagedObjectEventFilter)
+	m.addManagedObject(name, placeholder, ManagedObjectEventFilter, true)
 }
 
 func (m *NamespacedObjectManager) AddManagedObjectWithFilter(name string, placeholder client.Object, filter func(client.Object, client.Object) bool) {
+	m.addManagedObject(name, placeholder, filter, true)
+}
+
+func (m *NamespacedObjectManager) addManagedObject(name string, placeholder client.Object, filter func(client.Object, client.Object) bool, watch bool) {
 	m.managedObjects = append(m.managedObjects, managedObject{
 		name:        name,
 		kind:        reflect.TypeOf(placeholder).String(),
 		placeholder: placeholder,
 		filter:      filter,
+		watch:       watch,
 	})
 }
 
@@ -106,13 +112,17 @@ func (m *NamespacedObjectManager) NewHPA(name string) *ascv2.HorizontalPodAutosc
 
 func (m *NamespacedObjectManager) NewServiceMonitor(name string) *monitoringv1.ServiceMonitor {
 	sm := monitoringv1.ServiceMonitor{}
-	m.AddManagedObject(name, &sm)
+	// Prometheus Operator resources are fetched through the backing client but are
+	// not supported by narrowcache's name-scoped watches.
+	m.addManagedObject(name, &sm, nil, false)
 	return &sm
 }
 
 func (m *NamespacedObjectManager) NewPrometheusRule(name string) *monitoringv1.PrometheusRule {
 	sm := monitoringv1.PrometheusRule{}
-	m.AddManagedObject(name, &sm)
+	// Prometheus Operator resources are fetched through the backing client but are
+	// not supported by narrowcache's name-scoped watches.
+	m.addManagedObject(name, &sm, nil, false)
 	return &sm
 }
 
@@ -139,7 +149,7 @@ func (m *NamespacedObjectManager) FetchAll(ctx context.Context) error {
 		objLog := ref.kind + "/" + ref.name
 		ref.placeholder.SetName(ref.name)
 		ref.placeholder.SetNamespace(m.Namespace)
-		if m.enqueuer != nil {
+		if m.enqueuer != nil && ref.watch {
 			request := reconcile.Request{NamespacedName: constants.FlowCollectorName}
 			if err := m.enqueuer.EnqueueOnChange(ctx, ref.placeholder, request, ref.filter); err != nil {
 				return err
