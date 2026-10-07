@@ -73,13 +73,12 @@ func contain(a []string, b string) bool {
 }
 
 func getProxyFromEnv() string {
-	var proxy string
-	if os.Getenv("http_proxy") != "" {
-		proxy = os.Getenv("http_proxy")
-	} else if os.Getenv("http_proxy") != "" {
-		proxy = os.Getenv("https_proxy")
+	for _, name := range []string{"http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY"} {
+		if proxy := os.Getenv(name); proxy != "" {
+			return proxy
+		}
 	}
-	return proxy
+	return ""
 }
 
 func getRouteAddress(ns, routeName string) string {
@@ -522,11 +521,11 @@ func waitForConfigMapDataInjection(namespace, configMapName, dataKey string) {
 			e2e.Logf("ConfigMap %s/%s not found yet, will retry: %v", namespace, configMapName, getErr)
 			return false, nil
 		}
-		if len(cm.Data) > 0 {
-			e2e.Logf("ConfigMap %s/%s has been populated with data", namespace, configMapName)
+		if value, found := cm.Data[dataKey]; found && value != "" {
+			e2e.Logf("ConfigMap %s/%s has been populated with key %s", namespace, configMapName, dataKey)
 			return true, nil
 		}
-		e2e.Logf("ConfigMap %s/%s exists but data not populated yet, will retry", namespace, configMapName)
+		e2e.Logf("ConfigMap %s/%s exists but key %s is not populated yet, will retry", namespace, configMapName, dataKey)
 		return false, nil
 	})
 	assertWaitPollNoErr(err, fmt.Sprintf("ConfigMap %s/%s data was not populated within timeout", namespace, configMapName))
@@ -1264,14 +1263,14 @@ func checkResourceDeleted(resourceType, resourceName, namespace string) {
 }
 
 // delete a resource
-func deleteResource(resourceType, resourceName, namespace string, optionalParameters ...string) {
+func deleteResource(resourceType, resourceName, namespace string) {
 	err := deleteDynamicResource(resourceType, resourceName, namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	checkResourceDeleted(resourceType, resourceName, namespace)
 }
 
 // get kubeadmin token of the cluster
-func getKubeAdminToken(kubeAdminPasswd, serverURL, currentContext string) string {
+func getKubeAdminToken(kubeAdminPasswd, serverURL string) string {
 
 	loginCmd := exec.Command("oc", "login", "-u", "kubeadmin", "-p", kubeAdminPasswd, serverURL, "--insecure-skip-tls-verify=true")
 	loginOutput, loginErr := loginCmd.CombinedOutput()
@@ -1318,7 +1317,7 @@ func getClientServerInfo(serverNS, clientNS, ipStackType string) (map[string]map
 	return clientServerMap, err
 }
 
-func removeResource(asAdmin bool, withoutNamespace bool, parameters ...string) {
+func removeResource(parameters ...string) {
 	ctx := context.Background()
 
 	// Parse parameters: first is resource type, second is resource name, rest are optional flags like -n namespace

@@ -481,6 +481,10 @@ type ContainerInfo struct {
 // getPodsNodesMap returns all pods per node
 func getPodsNodesMap(nodes []NodeInfo) map[string][]PodInfo {
 	podsMap := make(map[string][]PodInfo)
+	nodeSet := make(map[string]struct{}, len(nodes))
+	for _, node := range nodes {
+		nodeSet[node.Name] = struct{}{}
+	}
 
 	// Get all namespaces
 	nsList, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
@@ -498,6 +502,9 @@ func getPodsNodesMap(nodes []NodeInfo) map[string][]PodInfo {
 
 		for _, pod := range podList.Items {
 			if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
+				continue
+			}
+			if _, found := nodeSet[pod.Spec.NodeName]; !found {
 				continue
 			}
 			var containers []ContainerInfo
