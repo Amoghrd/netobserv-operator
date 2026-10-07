@@ -265,21 +265,13 @@ func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) 
 	}
 	req.Header = h
 
-	var tr *http.Transport
-	proxy := getProxyFromEnv(req.URL.Scheme)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 
 	//  don't use proxy if svc/loki is port-forwarded to localhost
-	if !c.localhost && len(proxy) > 0 {
-		proxyURL, err := url.Parse(proxy)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			Proxy:           http.ProxyURL(proxyURL),
-		}
-	} else {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+	if !c.localhost {
+		tr.Proxy = http.ProxyFromEnvironment
 	}
 
 	client := &http.Client{Transport: tr}

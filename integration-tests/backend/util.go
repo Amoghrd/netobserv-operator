@@ -9,7 +9,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,25 +69,6 @@ func contain(a []string, b string) bool {
 		}
 	}
 	return false
-}
-
-func getProxyFromEnv(scheme string) string {
-	var names []string
-	switch strings.ToLower(scheme) {
-	case "http":
-		names = []string{"http_proxy", "HTTP_PROXY"}
-	case "https":
-		names = []string{"https_proxy", "HTTPS_PROXY"}
-	default:
-		return ""
-	}
-
-	for _, name := range names {
-		if proxy := os.Getenv(name); proxy != "" {
-			return proxy
-		}
-	}
-	return ""
 }
 
 func getRouteAddress(ns, routeName string) string {
@@ -313,19 +293,9 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 
 	req.Header = header
 
-	var tr *http.Transport
-	proxy := getProxyFromEnv(req.URL.Scheme)
-	if len(proxy) > 0 {
-		proxyURL, err := url.Parse(proxy)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			Proxy:           http.ProxyURL(proxyURL),
-		}
-	} else {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		Proxy:           http.ProxyFromEnvironment,
 	}
 
 	client := &http.Client{Transport: tr}
