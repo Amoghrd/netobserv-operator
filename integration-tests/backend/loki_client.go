@@ -266,7 +266,7 @@ func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) 
 	req.Header = h
 
 	var tr *http.Transport
-	proxy := getProxyFromEnv()
+	proxy := getProxyFromEnv(req.URL.Scheme)
 
 	//  don't use proxy if svc/loki is port-forwarded to localhost
 	if !c.localhost && len(proxy) > 0 {

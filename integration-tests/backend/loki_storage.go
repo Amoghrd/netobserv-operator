@@ -72,7 +72,9 @@ func generateS3Config(cred s3Credential) aws.Config {
 		// For ODF and Minio, they're deployed in OCP clusters
 		// In some clusters, we can't connect it without proxy, here add proxy settings to s3 client when there has http_proxy or https_proxy in the env var
 		httpClient := awshttp.NewBuildableClient().WithTransportOptions(func(tr *http.Transport) {
-			proxy := getProxyFromEnv()
+			endpointURL, err := url.Parse(cred.Endpoint)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			proxy := getProxyFromEnv(endpointURL.Scheme)
 			if len(proxy) > 0 {
 				proxyURL, err := url.Parse(proxy)
 				o.Expect(err).NotTo(o.HaveOccurred())

@@ -72,8 +72,18 @@ func contain(a []string, b string) bool {
 	return false
 }
 
-func getProxyFromEnv() string {
-	for _, name := range []string{"http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY"} {
+func getProxyFromEnv(scheme string) string {
+	var names []string
+	switch strings.ToLower(scheme) {
+	case "http":
+		names = []string{"http_proxy", "HTTP_PROXY"}
+	case "https":
+		names = []string{"https_proxy", "HTTPS_PROXY"}
+	default:
+		return ""
+	}
+
+	for _, name := range names {
 		if proxy := os.Getenv(name); proxy != "" {
 			return proxy
 		}
@@ -304,7 +314,7 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 	req.Header = header
 
 	var tr *http.Transport
-	proxy := getProxyFromEnv()
+	proxy := getProxyFromEnv(req.URL.Scheme)
 	if len(proxy) > 0 {
 		proxyURL, err := url.Parse(proxy)
 		o.Expect(err).NotTo(o.HaveOccurred())

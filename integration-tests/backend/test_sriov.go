@@ -120,7 +120,7 @@ func runNetObservSriovFlowTest(namespace string, hardware sriovHardware, flowCol
 	g.By("Wait for NetObserv flows over the SR-IOV interface")
 	startTime := time.Now().Add(-time.Minute)
 	time.Sleep(30 * time.Second)
-	interfaceFilter := fmt.Sprintf("\"Interfaces\":\\[\"%s\"", sriovInterface)
+	interfaceFilter := fmt.Sprintf("\"Interfaces\":\\[[^]]*\"%s\"", sriovInterface)
 	flowRecords := getSriovFlowRecords(
 		Lokilabels{App: "netobserv-flowcollector"}, flow.MonolithicLokiURL, startTime, interfaceFilter,
 	)
