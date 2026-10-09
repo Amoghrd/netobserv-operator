@@ -82,6 +82,7 @@ var gvrMap = map[string]schema.GroupVersionResource{
 	"sriovnetwork":           {Group: "sriovnetwork.openshift.io", Version: "v1", Resource: "sriovnetworks"},
 	"sriovnetworknodepolicy": {Group: "sriovnetwork.openshift.io", Version: "v1", Resource: "sriovnetworknodepolicies"},
 	"sriovnetworknodestate":  {Group: "sriovnetwork.openshift.io", Version: "v1", Resource: "sriovnetworknodestates"},
+	"sriovoperatorconfig":    {Group: "sriovnetwork.openshift.io", Version: "v1", Resource: "sriovoperatorconfigs"},
 
 	// Storage
 	"storageclass": {Group: "storage.k8s.io", Version: "v1", Resource: "storageclasses"},

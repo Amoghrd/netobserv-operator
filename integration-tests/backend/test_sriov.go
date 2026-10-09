@@ -10,16 +10,75 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
-// SR-IOV setup pre-req: https://gitlab.cee.redhat.com/netobserv-qe/netobserv-qe-scripts/-/blob/main/sriov/SRIOV-testing-guide.md?ref_type=heads#sriov-testing-guide
+// SR-IOV hardware and access prerequisites (operator setup is handled below): https://gitlab.cee.redhat.com/netobserv-qe/netobserv-qe-scripts/-/blob/main/sriov/SRIOV-testing-guide.md?ref_type=heads#sriov-testing-guide
 
-var _ = g.Describe("[sig-netobserv] Network_Observability with SR-IOV", g.Serial, func() {
-	var namespace string
-	var hardware sriovHardware
+var _ = g.Describe("[sig-netobserv] Network_Observability with SR-IOV", g.Ordered, g.Serial, func() {
+	var (
+		namespace           string
+		hardware            sriovHardware
+		operatorInstalled   bool
+		operatorConfigAdded bool
+		nfsProvisionerPath  = filePath.Join(baseDir, "networking", "sriov", "nfs-provisioner.yaml")
+		sriovCatalogSource  = Resource{"catalogsource", "sriov-konflux", "openshift-marketplace"}
+		sriovCatalog        = CatalogSourceObjects{"stable", sriovCatalogSource.Name, sriovCatalogSource.Namespace}
+		sriovOperator       = SubscriptionObjects{
+			OperatorName:  sriovPackage,
+			Namespace:     sriovOperatorNS,
+			PackageName:   sriovPackage,
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "singlenamespace-og.yaml"),
+			CatalogSource: &sriovCatalog,
+		}
+	)
+
+	g.BeforeAll(func() {
+		// Skip unsupported clusters before installing any cluster-wide SR-IOV resources.
+		hardware = getNetObservSriovHardware()
+
+		catalogImage := "quay.io/redhat-user-workloads/ocp-art-tenant/art-fbc:ocp__5.0__ose-sriov-network-rhel9-operator"
+		catalogErr := setupCatalogSource(
+			sriovCatalogSource,
+			filePath.Join(baseDir, "networking", "sriov", "catalog-source-template.yaml"),
+			filePath.Join(baseDir, "networking", "sriov", "image-digest-mirror-set.yaml"),
+			catalogImage,
+			false,
+			&sriovCatalog,
+			&sriovOperator,
+		)
+		o.Expect(catalogErr).NotTo(o.HaveOccurred(), "failed to set up SR-IOV catalog source and image mirrors")
+
+		operatorExists, err := CheckOperatorStatus(sriovOperator.Namespace, sriovOperator.PackageName)
+		o.Expect(err).NotTo(o.HaveOccurred(), "failed to check SR-IOV operator status")
+		if !operatorExists {
+			operatorInstalled = true
+			ensureOperatorDeployed(sriovOperator, sriovCatalog, "name=sriov-network-operator")
+		}
+
+		_, err = getDynamicResource("sriovoperatorconfig", "default", sriovOperatorNS)
+		if apierrors.IsNotFound(err) {
+			operatorConfigAdded = true
+			configPath := filePath.Join(baseDir, "networking", "sriov", "sriovoperatorconfig.yaml")
+			ApplyResourceFromFile("", configPath)
+		} else {
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to check SriovOperatorConfig")
+		}
+		waitForSriovOperatorReady()
+	})
+
+	g.AfterAll(func() {
+		if operatorInstalled {
+			sriovOperator.uninstallOperator()
+		} else if operatorConfigAdded {
+			err := (Resource{"sriovoperatorconfig", "default", sriovOperatorNS}).clear()
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to remove test-created SriovOperatorConfig")
+		}
+	})
 
 	g.BeforeEach(func() {
 		oc := NewCLI()
 		namespace = oc.Namespace()
-		hardware = discoverNetObservSriovHardware()
+		hardware = discoverNetObservSriovHardware(hardware)
+		ensureSriovLokiStorage(nfsProvisionerPath)
 	})
 
 	g.It("Author:memodi-NonPreRelease-Medium-67619-Verify NetObserv flows when the FlowCollector starts before SR-IOV [Serial]", func() {
@@ -117,19 +176,13 @@ func runNetObservSriovFlowTest(namespace string, hardware sriovHardware, flowCol
 		flow.CreateFlowcollector()
 	}
 
-	g.By("Wait for NetObserv flows over the SR-IOV interface")
+	g.By("Wait for SR-IOV flows enriched with workload namespaces")
 	startTime := time.Now().Add(-time.Minute)
 	time.Sleep(30 * time.Second)
 	interfaceFilter := fmt.Sprintf("\"Interfaces\":\\[[^]]*\"%s\"", sriovInterface)
 	flowRecords := getSriovFlowRecords(
-		Lokilabels{App: "netobserv-flowcollector"}, flow.MonolithicLokiURL, startTime, interfaceFilter,
-	)
-	o.Expect(flowRecords).NotTo(o.BeEmpty(), "expected flows on %s", sriovInterface)
-
-	g.By("Verify flows are enriched with workload namespaces")
-	enrichedFlows := getSriovFlowRecords(
 		Lokilabels{App: "netobserv-flowcollector", SrcK8SNamespace: namespace, DstK8SNamespace: namespace},
 		flow.MonolithicLokiURL, startTime, interfaceFilter,
 	)
-	o.Expect(enrichedFlows).NotTo(o.BeEmpty(), "expected SR-IOV flows enriched with source and destination namespaces")
+	o.Expect(flowRecords).NotTo(o.BeEmpty(), "expected flows on %s enriched with source and destination namespaces", sriovInterface)
 }
