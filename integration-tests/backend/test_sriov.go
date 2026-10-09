@@ -14,14 +14,12 @@ import (
 
 var _ = g.Describe("[sig-netobserv] Network_Observability with SR-IOV", g.Ordered, g.Serial, func() {
 	var (
-		namespace           string
-		hardware            sriovHardware
-		operatorInstalled   bool
-		operatorConfigAdded bool
-		nfsProvisionerPath  = filePath.Join(baseDir, "networking", "sriov", "nfs-provisioner.yaml")
-		sriovCatalogSource  = Resource{"catalogsource", "sriov-konflux", "openshift-marketplace"}
-		sriovCatalog        = CatalogSourceObjects{"stable", sriovCatalogSource.Name, sriovCatalogSource.Namespace}
-		sriovOperator       = SubscriptionObjects{
+		namespace          string
+		hardware           sriovHardware
+		nfsProvisionerPath = filePath.Join(baseDir, "networking", "sriov", "nfs-provisioner.yaml")
+		sriovCatalogSource = Resource{"catalogsource", "sriov-konflux", "openshift-marketplace"}
+		sriovCatalog       = CatalogSourceObjects{"stable", sriovCatalogSource.Name, sriovCatalogSource.Namespace}
+		sriovOperator      = SubscriptionObjects{
 			OperatorName:  sriovPackage,
 			Namespace:     sriovOperatorNS,
 			PackageName:   sriovPackage,
@@ -35,6 +33,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability with SR-IOV", g.Ordere
 		// Skip unsupported clusters before installing any cluster-wide SR-IOV resources.
 		hardware = getNetObservSriovHardware()
 
+		// Keep the cluster-wide operator and config installed for subsequent runs.
 		catalogImage := "quay.io/redhat-user-workloads/ocp-art-tenant/art-fbc:ocp__5.0__ose-sriov-network-rhel9-operator"
 		catalogErr := setupCatalogSource(
 			sriovCatalogSource,
@@ -50,28 +49,17 @@ var _ = g.Describe("[sig-netobserv] Network_Observability with SR-IOV", g.Ordere
 		operatorExists, err := CheckOperatorStatus(sriovOperator.Namespace, sriovOperator.PackageName)
 		o.Expect(err).NotTo(o.HaveOccurred(), "failed to check SR-IOV operator status")
 		if !operatorExists {
-			operatorInstalled = true
 			ensureOperatorDeployed(sriovOperator, sriovCatalog, "name=sriov-network-operator")
 		}
 
 		_, err = getDynamicResource("sriovoperatorconfig", "default", sriovOperatorNS)
 		if apierrors.IsNotFound(err) {
-			operatorConfigAdded = true
 			configPath := filePath.Join(baseDir, "networking", "sriov", "sriovoperatorconfig.yaml")
 			ApplyResourceFromFile("", configPath)
 		} else {
 			o.Expect(err).NotTo(o.HaveOccurred(), "failed to check SriovOperatorConfig")
 		}
 		waitForSriovOperatorReady()
-	})
-
-	g.AfterAll(func() {
-		if operatorInstalled {
-			sriovOperator.uninstallOperator()
-		} else if operatorConfigAdded {
-			err := (Resource{"sriovoperatorconfig", "default", sriovOperatorNS}).clear()
-			o.Expect(err).NotTo(o.HaveOccurred(), "failed to remove test-created SriovOperatorConfig")
-		}
 	})
 
 	g.BeforeEach(func() {
