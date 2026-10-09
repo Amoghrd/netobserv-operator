@@ -10,7 +10,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
-// SR-IOV hardware and access prerequisites (operator setup is handled below): https://gitlab.cee.redhat.com/netobserv-qe/netobserv-qe-scripts/-/blob/main/sriov/SRIOV-testing-guide.md?ref_type=heads#sriov-testing-guide
+// SR-IOV hardware and cluster access prerequisites are documented in the QE guide.
+// The test deploys the SR-IOV Network Operator and, when the cluster has no default
+// StorageClass, deploys the QE scripts' NFS provisioner setup.
+// https://gitlab.cee.redhat.com/netobserv-qe/netobserv-qe-scripts/-/blob/main/sriov/SRIOV-testing-guide.md?ref_type=heads#sriov-testing-guide
 
 var _ = g.Describe("[sig-netobserv] Network_Observability with SR-IOV", g.Ordered, g.Serial, func() {
 	var (
