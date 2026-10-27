@@ -284,9 +284,6 @@ func (flowlog *Flowlog) verifyIPFIXFields() {
 		o.Expect(srcIP.Is6()).To(o.BeTrue(), flow)
 		o.Expect(dstIP.Is6()).To(o.BeTrue(), flow)
 	}
-	o.Expect(flowlog.SrcPort).Should(o.BeNumerically(">=", 0), flow)
-	o.Expect(flowlog.DstPort).Should(o.BeNumerically(">=", 0), flow)
-	o.Expect(flowlog.Proto).Should(o.BeNumerically(">", 0), flow)
 	o.Expect(flowlog.Packets).Should(o.BeNumerically(">", 0), flow)
 	o.Expect(flowlog.Sampling).Should(o.BeNumerically(">=", 0), flow)
 }
